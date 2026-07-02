@@ -58,6 +58,12 @@ Ensure the required compilation and emulation utilities are installed on your Li
 # Ubuntu / Debian
 sudo apt-get update
 sudo apt-get install -y nasm gcc xorriso mtools dosfstools grub-common grub-pc-bin qemu-system-x86
+
+# Arch Linux
+sudo pacman -Syu nasm gcc xorriso mtools dosfstools grub qemu-system-x86
+
+# Fedora
+sudo dnf install -y nasm gcc xorriso mtools dosfstools grub2-tools grub2-pc-modules qemu-system-x86
 ```
 
 ### Execution
