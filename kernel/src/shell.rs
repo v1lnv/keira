@@ -31,7 +31,7 @@ pub fn print_logo() {
     unsafe {
         vga::set_color(CURRENT_THEME.text_fg, CURRENT_THEME.text_bg);
     }
-    vga::print_str("Keira Kernel 0.1.0-keira-1 (tty1)\n\n");
+    vga::print_str("Keira Kernel 0.2.0-keira-1 (tty1)\n\n");
 }
 
 /// Print the shell prompt and record cursor position

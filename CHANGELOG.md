@@ -4,7 +4,13 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
----
+## [0.2.0] - 2026-07-02
+
+### Added
+- Visual text editor improvements including a 5-column line numbering gutter.
+- Fast interactive text search (Ctrl+F) with dynamic high-contrast match highlighting in the editor.
+- Visual crash dump handling (Blue Screen of Death) rendering diagnostics on a White on Blue VGA screen.
+- Enhanced batch script runner command (`script`) with robust 64KB static buffer allocations.
 
 ## [0.1.0] - 2026-07-02
 

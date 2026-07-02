@@ -60,6 +60,9 @@ pub unsafe fn editor_start(filename: &str) -> Result<(), &'static str> {
     EDIT_CUR_Y = 0;
     EDITOR_CONFIRM_EXIT = false;
     EDITOR_CONFIRM_SAVE = false;
+    IN_SEARCH_MODE = false;
+    SEARCH_LEN = 0;
+    SEARCH_BUFFER = [0; 16];
 
     let mut file_buf = [0u8; 2048];
     match crate::fs::fat::read_file_content(filename, &mut file_buf) {
@@ -79,7 +82,7 @@ pub unsafe fn editor_start(filename: &str) -> Result<(), &'static str> {
                 } else if b == b'\r' {
                     // skip CR
                 } else {
-                    if x < 80 {
+                    if x < 75 {
                         EDITOR_GRID[y][x] = b;
                         x += 1;
                     }
@@ -108,7 +111,7 @@ pub unsafe fn editor_redraw() {
 
     // 1. Draw top bar (Header)
     vga::set_color(vga::Color::White, vga::Color::DarkGrey);
-    vga::print_str("  Keira Text Editor 0.1.0  |  File: ");
+    vga::print_str("  Keira Text Editor 0.2.0  |  File: ");
     let filename_slice = &EDIT_FILENAME[..EDIT_FILENAME_LEN];
     if let Ok(name_str) = core::str::from_utf8(filename_slice) {
         vga::print_str(name_str);
@@ -121,41 +124,115 @@ pub unsafe fn editor_redraw() {
         current_col += 1;
     }
 
-    // 2. Draw grid content with syntax highlighting
+    // 2. Draw grid content with syntax highlighting and line numbers
     for y in 0..23 {
         vga_set_cursor_pos((y + 1) as u16, 0);
-        let len = LINE_LENS[y] as usize;
+
+        // Render line number gutter (e.g. " 1 | ")
+        let val = (y + 1) as u8;
+        let ten = val / 10;
+        let one = val % 10;
+        let ten_char = if ten == 0 { b' ' } else { b'0' + ten };
+        let one_char = b'0' + one;
+        let gutter = [ten_char, one_char, b' ', b'|', b' '];
+        if let Ok(gutter_str) = core::str::from_utf8(&gutter) {
+            vga::set_color(vga::Color::DarkGrey, vga::Color::Black);
+            vga::print_str(gutter_str);
+        }
+
+        let len = core::cmp::min(LINE_LENS[y] as usize, 75);
         let mut x = 0;
+        let mut highlight_remaining = 0;
 
         while x < len {
+            // Check if search match starts at this position
+            if SEARCH_LEN > 0 && highlight_remaining == 0 && x + SEARCH_LEN <= len {
+                let mut matched = true;
+                for i in 0..SEARCH_LEN {
+                    if EDITOR_GRID[y][x + i] != SEARCH_BUFFER[i] {
+                        matched = false;
+                        break;
+                    }
+                }
+                if matched {
+                    highlight_remaining = SEARCH_LEN;
+                }
+            }
+
+            let bg_color = if highlight_remaining > 0 {
+                vga::Color::Yellow
+            } else {
+                vga::Color::Black
+            };
+
+            let fg_override = highlight_remaining > 0;
             let c = EDITOR_GRID[y][x];
 
             // 1. Highlight numbers
             if c >= b'0' && c <= b'9' {
-                vga::set_color(vga::Color::LightRed, vga::Color::Black);
+                vga::set_color(
+                    if fg_override { vga::Color::Black } else { vga::Color::LightRed },
+                    bg_color,
+                );
                 let s = [c];
                 if let Ok(c_str) = core::str::from_utf8(&s) {
                     vga::print_str(c_str);
                 }
                 x += 1;
+                if highlight_remaining > 0 {
+                    highlight_remaining -= 1;
+                }
                 continue;
             }
 
             // 2. Highlight strings
             if c == b'"' {
-                vga::set_color(vga::Color::Yellow, vga::Color::Black);
+                vga::set_color(
+                    if fg_override { vga::Color::Black } else { vga::Color::Yellow },
+                    bg_color,
+                );
                 let s = [c];
                 if let Ok(c_str) = core::str::from_utf8(&s) {
                     vga::print_str(c_str);
                 }
                 x += 1;
+                if highlight_remaining > 0 {
+                    highlight_remaining -= 1;
+                }
                 while x < len {
+                    if SEARCH_LEN > 0 && highlight_remaining == 0 && x + SEARCH_LEN <= len {
+                        let mut matched = true;
+                        for i in 0..SEARCH_LEN {
+                            if EDITOR_GRID[y][x + i] != SEARCH_BUFFER[i] {
+                                matched = false;
+                                break;
+                            }
+                        }
+                        if matched {
+                            highlight_remaining = SEARCH_LEN;
+                        }
+                    }
+                    let str_bg = if highlight_remaining > 0 {
+                        vga::Color::Yellow
+                    } else {
+                        vga::Color::Black
+                    };
+                    let str_fg = if highlight_remaining > 0 {
+                        vga::Color::Black
+                    } else {
+                        vga::Color::Yellow
+                    };
+                    vga::set_color(str_fg, str_bg);
+
                     let sc = EDITOR_GRID[y][x];
                     let s_sc = [sc];
                     if let Ok(c_str) = core::str::from_utf8(&s_sc) {
                         vga::print_str(c_str);
                     }
                     x += 1;
+                    if highlight_remaining > 0 {
+                        highlight_remaining -= 1;
+                    }
                     if sc == b'"' {
                         break;
                     }
@@ -163,19 +240,52 @@ pub unsafe fn editor_redraw() {
                 continue;
             }
             if c == b'\'' {
-                vga::set_color(vga::Color::Yellow, vga::Color::Black);
+                vga::set_color(
+                    if fg_override { vga::Color::Black } else { vga::Color::Yellow },
+                    bg_color,
+                );
                 let s = [c];
                 if let Ok(c_str) = core::str::from_utf8(&s) {
                     vga::print_str(c_str);
                 }
                 x += 1;
+                if highlight_remaining > 0 {
+                    highlight_remaining -= 1;
+                }
                 while x < len {
+                    if SEARCH_LEN > 0 && highlight_remaining == 0 && x + SEARCH_LEN <= len {
+                        let mut matched = true;
+                        for i in 0..SEARCH_LEN {
+                            if EDITOR_GRID[y][x + i] != SEARCH_BUFFER[i] {
+                                matched = false;
+                                break;
+                            }
+                        }
+                        if matched {
+                            highlight_remaining = SEARCH_LEN;
+                        }
+                    }
+                    let str_bg = if highlight_remaining > 0 {
+                        vga::Color::Yellow
+                    } else {
+                        vga::Color::Black
+                    };
+                    let str_fg = if highlight_remaining > 0 {
+                        vga::Color::Black
+                    } else {
+                        vga::Color::Yellow
+                    };
+                    vga::set_color(str_fg, str_bg);
+
                     let sc = EDITOR_GRID[y][x];
                     let s_sc = [sc];
                     if let Ok(c_str) = core::str::from_utf8(&s_sc) {
                         vga::print_str(c_str);
                     }
                     x += 1;
+                    if highlight_remaining > 0 {
+                        highlight_remaining -= 1;
+                    }
                     if sc == b'\'' {
                         break;
                     }
@@ -185,14 +295,44 @@ pub unsafe fn editor_redraw() {
 
             // 3. Highlight comments
             if c == b'/' && x + 1 < len && EDITOR_GRID[y][x + 1] == b'/' {
-                vga::set_color(vga::Color::LightGreen, vga::Color::Black);
+                vga::set_color(
+                    if fg_override { vga::Color::Black } else { vga::Color::LightGreen },
+                    bg_color,
+                );
                 while x < len {
+                    if SEARCH_LEN > 0 && highlight_remaining == 0 && x + SEARCH_LEN <= len {
+                        let mut matched = true;
+                        for i in 0..SEARCH_LEN {
+                            if EDITOR_GRID[y][x + i] != SEARCH_BUFFER[i] {
+                                matched = false;
+                                break;
+                            }
+                        }
+                        if matched {
+                            highlight_remaining = SEARCH_LEN;
+                        }
+                    }
+                    let cmt_bg = if highlight_remaining > 0 {
+                        vga::Color::Yellow
+                    } else {
+                        vga::Color::Black
+                    };
+                    let cmt_fg = if highlight_remaining > 0 {
+                        vga::Color::Black
+                    } else {
+                        vga::Color::LightGreen
+                    };
+                    vga::set_color(cmt_fg, cmt_bg);
+
                     let sc = EDITOR_GRID[y][x];
                     let s_sc = [sc];
                     if let Ok(c_str) = core::str::from_utf8(&s_sc) {
                         vga::print_str(c_str);
                     }
                     x += 1;
+                    if highlight_remaining > 0 {
+                        highlight_remaining -= 1;
+                    }
                 }
                 continue;
             }
@@ -211,12 +351,18 @@ pub unsafe fn editor_redraw() {
                 || c == b'<'
                 || c == b'>'
             {
-                vga::set_color(vga::Color::LightMagenta, vga::Color::Black);
+                vga::set_color(
+                    if fg_override { vga::Color::Black } else { vga::Color::LightMagenta },
+                    bg_color,
+                );
                 let s = [c];
                 if let Ok(c_str) = core::str::from_utf8(&s) {
                     vga::print_str(c_str);
                 }
                 x += 1;
+                if highlight_remaining > 0 {
+                    highlight_remaining -= 1;
+                }
                 continue;
             }
 
@@ -237,46 +383,86 @@ pub unsafe fn editor_redraw() {
                     _ => false,
                 };
 
-                if is_keyword {
-                    vga::set_color(vga::Color::LightBlue, vga::Color::Black);
-                } else {
-                    vga::set_color(vga::Color::White, vga::Color::Black);
-                }
+                for (offset, &b) in word_slice.iter().enumerate() {
+                    let word_char_x = start + offset;
+                    if SEARCH_LEN > 0
+                        && highlight_remaining == 0
+                        && word_char_x + SEARCH_LEN <= len
+                    {
+                        let mut matched = true;
+                        for i in 0..SEARCH_LEN {
+                            if EDITOR_GRID[y][word_char_x + i] != SEARCH_BUFFER[i] {
+                                matched = false;
+                                break;
+                            }
+                        }
+                        if matched {
+                            highlight_remaining = SEARCH_LEN;
+                        }
+                    }
+                    let w_bg = if highlight_remaining > 0 {
+                        vga::Color::Yellow
+                    } else {
+                        vga::Color::Black
+                    };
+                    let w_fg = if highlight_remaining > 0 {
+                        vga::Color::Black
+                    } else if is_keyword {
+                        vga::Color::LightBlue
+                    } else {
+                        vga::Color::White
+                    };
+                    vga::set_color(w_fg, w_bg);
 
-                for &b in word_slice {
                     let s_b = [b];
                     if let Ok(c_str) = core::str::from_utf8(&s_b) {
                         vga::print_str(c_str);
+                    }
+                    if highlight_remaining > 0 {
+                        highlight_remaining -= 1;
                     }
                 }
                 continue;
             }
 
             // Default character
-            vga::set_color(vga::Color::White, vga::Color::Black);
+            vga::set_color(
+                if fg_override { vga::Color::Black } else { vga::Color::White },
+                bg_color,
+            );
             let s = [c];
             if let Ok(c_str) = core::str::from_utf8(&s) {
                 vga::print_str(c_str);
             }
             x += 1;
+            if highlight_remaining > 0 {
+                highlight_remaining -= 1;
+            }
         }
 
         // Pad rest of line with space
         vga::set_color(vga::Color::White, vga::Color::Black);
         let mut pad = len;
-        while pad < 80 {
+        while pad < 75 {
             vga::print_str(" ");
             pad += 1;
         }
     }
 
-    // 3. Draw bottom bar (Help/Status)
+    // 3. Draw bottom bar (Help/Status/Search)
     vga_set_cursor_pos(24, 0);
     if EDITOR_CONFIRM_SAVE {
         vga::set_color(vga::Color::White, vga::Color::DarkGrey);
         vga::print_str("  Save changes? [Y] Yes  [N] No  [C] Cancel");
-    } else if EDITOR_STATUS_LEN > 0 {
+    } else if IN_SEARCH_MODE {
         vga::set_color(vga::Color::White, vga::Color::DarkGrey);
+        vga::print_str("  Search: ");
+        let search_slice = &SEARCH_BUFFER[..SEARCH_LEN];
+        if let Ok(s) = core::str::from_utf8(search_slice) {
+            vga::print_str(s);
+        }
+    } else if EDITOR_STATUS_LEN > 0 {
+        vga::set_color(EDITOR_STATUS_COLOR, vga::Color::DarkGrey);
         vga::print_str("  ");
         let status_slice = &EDITOR_STATUS_MSG[..EDITOR_STATUS_LEN];
         if let Ok(s) = core::str::from_utf8(status_slice) {
@@ -284,11 +470,11 @@ pub unsafe fn editor_redraw() {
         }
     } else {
         vga::set_color(vga::Color::White, vga::Color::DarkGrey);
-        vga::print_str("  ESC: Exit Prompt  |  Ctrl+S: Quick Save  |  Ctrl+Q: Save & Exit");
+        vga::print_str("  ESC: Exit  |  Ctrl+F: Search  |  Ctrl+S: Save  |  Ctrl+Q: Save & Exit");
     }
 
     let mut current_col = vga_get_cursor_col();
-    while current_col < 79 {
+    while current_col < 80 {
         vga::print_str(" ");
         current_col += 1;
     }
@@ -297,8 +483,10 @@ pub unsafe fn editor_redraw() {
 
     if EDITOR_CONFIRM_SAVE {
         vga_set_cursor_pos(24, 45);
+    } else if IN_SEARCH_MODE {
+        vga_set_cursor_pos(24, (10 + SEARCH_LEN) as u16);
     } else {
-        vga_set_cursor_pos(EDIT_CUR_Y + 1, EDIT_CUR_X);
+        vga_set_cursor_pos(EDIT_CUR_Y + 1, EDIT_CUR_X + 5);
     }
 }
 
@@ -339,6 +527,81 @@ pub unsafe fn editor_handle_keypress(c: u8) {
         IN_EDITOR_MODE = false;
         vga_init();
         super::print_prompt();
+        return;
+    }
+
+    if IN_SEARCH_MODE {
+        match c {
+            27 => {
+                // Esc: Exit search mode
+                IN_SEARCH_MODE = false;
+                SEARCH_LEN = 0;
+                SEARCH_BUFFER = [0; 16];
+                editor_redraw();
+            }
+            10 | 13 => {
+                // Enter: Execute search
+                let mut found = false;
+                let term = &SEARCH_BUFFER[..SEARCH_LEN];
+                if SEARCH_LEN > 0 {
+                    'outer: for y in 0..23 {
+                        let len = LINE_LENS[y] as usize;
+                        if len >= SEARCH_LEN {
+                            for x in 0..=(len - SEARCH_LEN) {
+                                let mut matched = true;
+                                for i in 0..SEARCH_LEN {
+                                    if EDITOR_GRID[y][x + i] != term[i] {
+                                        matched = false;
+                                        break;
+                                    }
+                                }
+                                if matched {
+                                    EDIT_CUR_Y = y as u16;
+                                    EDIT_CUR_X = x as u16;
+                                    found = true;
+                                    break 'outer;
+                                }
+                            }
+                        }
+                    }
+                }
+                if !found && SEARCH_LEN > 0 {
+                    let msg = b"Search term not found!";
+                    EDITOR_STATUS_LEN = msg.len();
+                    EDITOR_STATUS_MSG[..msg.len()].copy_from_slice(msg);
+                    EDITOR_STATUS_COLOR = vga::Color::LightRed;
+                }
+                IN_SEARCH_MODE = false;
+                editor_redraw();
+            }
+            8 => {
+                // Backspace
+                if SEARCH_LEN > 0 {
+                    SEARCH_LEN -= 1;
+                    SEARCH_BUFFER[SEARCH_LEN] = 0;
+                }
+                editor_redraw();
+            }
+            32..=126 => {
+                // Printable characters
+                if SEARCH_LEN < 16 {
+                    SEARCH_BUFFER[SEARCH_LEN] = c;
+                    SEARCH_LEN += 1;
+                }
+                editor_redraw();
+            }
+            _ => {}
+        }
+        return;
+    }
+
+    // Ctrl+F (6) Search shortcut
+    if c == 6 {
+        IN_SEARCH_MODE = true;
+        SEARCH_LEN = 0;
+        SEARCH_BUFFER = [0; 16];
+        EDITOR_STATUS_LEN = 0;
+        editor_redraw();
         return;
     }
 
@@ -401,14 +664,14 @@ pub unsafe fn editor_handle_keypress(c: u8) {
             let mut x = EDIT_CUR_X as usize;
             let mut len = LINE_LENS[y] as usize;
             for _ in 0..4 {
-                if len < 80 {
+                if len < 75 {
                     for i in (x..len).rev() {
                         EDITOR_GRID[y][i + 1] = EDITOR_GRID[y][i];
                     }
                     EDITOR_GRID[y][x] = b' ';
                     LINE_LENS[y] += 1;
                     len += 1;
-                    if EDIT_CUR_X < 79 {
+                    if EDIT_CUR_X < 74 {
                         EDIT_CUR_X += 1;
                         x += 1;
                     }
@@ -465,7 +728,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
                 let prev_len = LINE_LENS[prev_y] as usize;
                 let cur_len = LINE_LENS[y] as usize;
 
-                let space_left = 80 - prev_len;
+                let space_left = 75 - prev_len;
                 let to_copy = core::cmp::min(cur_len, space_left);
 
                 for i in 0..to_copy {
@@ -547,14 +810,14 @@ pub unsafe fn editor_handle_keypress(c: u8) {
             let x = EDIT_CUR_X as usize;
             let len = LINE_LENS[y] as usize;
 
-            if len < 80 {
+            if len < 75 {
                 for i in (x..len).rev() {
                     EDITOR_GRID[y][i + 1] = EDITOR_GRID[y][i];
                 }
                 EDITOR_GRID[y][x] = c;
                 LINE_LENS[y] += 1;
 
-                if EDIT_CUR_X < 79 {
+                if EDIT_CUR_X < 74 {
                     EDIT_CUR_X += 1;
                 } else if EDIT_CUR_Y < 22 {
                     EDIT_CUR_X = 0;

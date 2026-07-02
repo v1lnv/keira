@@ -64,3 +64,8 @@ pub static mut LOGIN_USERNAME_LEN: usize = 0;
 pub static mut CURRENT_USER: [u8; 16] = *b"default         ";
 pub static mut CURRENT_USER_LEN: usize = 7;
 pub static mut IS_ADMIN: bool = false;
+
+// Editor Search Mode States
+pub static mut IN_SEARCH_MODE: bool = false;
+pub static mut SEARCH_BUFFER: [u8; 16] = [0; 16];
+pub static mut SEARCH_LEN: usize = 0;

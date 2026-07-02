@@ -13,6 +13,9 @@ extern "C" {
 
     /// Set the current text color (foreground and background).
     fn vga_set_color(fg: u8, bg: u8);
+
+    /// Initialize/clear the VGA text mode screen.
+    fn vga_init();
 }
 
 // VGA Color Constants (mirrors the C enum for Rust usage)
@@ -46,6 +49,13 @@ pub static mut REDIRECT_BUFFER: [u8; 4096] = [0; 4096];
 pub static mut REDIRECT_LEN: usize = 0;
 
 // Safe Public API
+
+/// Initialize/clear the VGA text mode screen.
+pub fn init() {
+    unsafe {
+        vga_init();
+    }
+}
 
 /// Write a single ASCII character to the VGA display at the current cursor.
 ///
