@@ -3,10 +3,6 @@
 use super::state::*;
 use crate::io::vga;
 
-extern "C" {
-    fn vga_backspace();
-}
-
 fn find_last_word(buf: &[u8]) -> (usize, &str) {
     let mut i = buf.len();
     while i > 0 && buf[i - 1] != b' ' {
@@ -73,7 +69,7 @@ pub unsafe fn handle_autocomplete() {
 
         let old_word_len = BUFFER_LEN - prefix_start;
         for _ in 0..old_word_len {
-            vga_backspace();
+            vga::backspace();
         }
 
         BUFFER_LEN = prefix_start;

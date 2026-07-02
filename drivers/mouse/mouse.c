@@ -14,6 +14,30 @@ static int32_t mouse_y = 12;
 static int32_t mouse_fx = 40 * 256; /* Fixed-point coordinates (coordinate * 256) */
 static int32_t mouse_fy = 12 * 256;
 
+static int32_t mouse_max_x = 80;
+static int32_t mouse_max_y = 25;
+static int32_t mouse_sensitivity_x = 24;
+static int32_t mouse_sensitivity_y = 12;
+
+void mouse_set_resolution(int32_t width, int32_t height) {
+    mouse_max_x = width;
+    mouse_max_y = height;
+    mouse_x = width / 2;
+    mouse_y = height / 2;
+    mouse_fx = mouse_x * 256;
+    mouse_fy = mouse_y * 256;
+
+    if (width > 80) {
+        // Graphics mode: needs square pixels and much higher sensitivity
+        mouse_sensitivity_x = 512;
+        mouse_sensitivity_y = 512;
+    } else {
+        // Text mode
+        mouse_sensitivity_x = 24;
+        mouse_sensitivity_y = 12;
+    }
+}
+
 /* PS/2 Controller wait functions */
 static inline void mouse_wait(uint8_t a_type) {
     uint32_t timeout = 100000;
@@ -108,18 +132,18 @@ void mouse_handler(void) {
             /* Ignore packets if x or y overflowed */
             if ((mouse_byte[0] & (MOUSE_FLAGS_X_OVERFLOW | MOUSE_FLAGS_Y_OVERFLOW)) == 0) {
                 /* Accumulate in fixed-point to allow smooth low-speed movement and prevent hyper-sensitivity */
-                mouse_fx += (int32_t)mouse_byte[1] * 24; /* X sensitivity */
-                mouse_fy -= (int32_t)mouse_byte[2] * 12; /* Y sensitivity (PS/2 Y is inverted) */
+                mouse_fx += (int32_t)mouse_byte[1] * mouse_sensitivity_x;
+                mouse_fy -= (int32_t)mouse_byte[2] * mouse_sensitivity_y;
 
-                /* Clamp to VGA screen boundaries (80x25 grid in 1/256 fixed-point) */
+                /* Clamp to screen boundaries (in 1/256 fixed-point) */
                 if (mouse_fx < 0)
                     mouse_fx = 0;
-                if (mouse_fx >= 80 * 256)
-                    mouse_fx = 79 * 256;
+                if (mouse_fx >= mouse_max_x * 256)
+                    mouse_fx = (mouse_max_x - 1) * 256;
                 if (mouse_fy < 0)
                     mouse_fy = 0;
-                if (mouse_fy >= 25 * 256)
-                    mouse_fy = 24 * 256;
+                if (mouse_fy >= mouse_max_y * 256)
+                    mouse_fy = (mouse_max_y - 1) * 256;
 
                 int32_t new_x = mouse_fx / 256;
                 int32_t new_y = mouse_fy / 256;

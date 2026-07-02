@@ -8,7 +8,6 @@ target/
 *.o
 *.d
 *.a
-*.bin
 *.iso
 *.elf
 

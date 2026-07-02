@@ -21,4 +21,9 @@ void mouse_init(void);
  */
 void mouse_handler(void);
 
+/**
+ * Set the mouse movement coordinate boundaries.
+ */
+void mouse_set_resolution(int32_t width, int32_t height);
+
 #endif /* MOUSE_H */

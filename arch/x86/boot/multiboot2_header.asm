@@ -19,6 +19,15 @@ header_start:
     ; Checksum formula: (magic + arch + length + checksum) must equal 0 modulo 2^32
     dd -(MULTIBOOT2_MAGIC + MULTIBOOT2_ARCH_I386 + (header_end - header_start))
 
+    ; Framebuffer Request Tag (type 5)
+    align 8
+    dw 5                                ; Tag type: 5 (Framebuffer request)
+    dw 0                                ; Tag flags: 0 (optional)
+    dd 20                               ; Tag size: 20 bytes
+    dd 0                                ; Requested width (0 = no preference)
+    dd 0                                ; Requested height (0 = no preference)
+    dd 0                                ; Requested depth (0 = no preference)
+
     ; End Tag (required): signals the end of the Multiboot2 header structures
     align 8                             ; Every tag structure must be 8-byte aligned
     dw 0                                ; Tag type: 0 (signals the terminator tag)

@@ -4,6 +4,19 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-02
+
+### Added
+- Support for Multiboot2 linear framebuffer (LFB) widescreen graphics mode with auto-detected native screen resolutions.
+- Memory-mapped identity page table allocations for high-address LFB video memory blocks.
+- Graphics console driver in Rust featuring an embedded IBM VGA 8x16 bitmap font renderer.
+- Horizontal memory shifting console scrolling and visual text cursor underline.
+- Premium White Arrow mouse cursor with a black outline using background pixel save/restore to eliminate trails.
+- Fullscreen mouse movement boundaries dynamically mapped to native widescreen resolutions in the PS/2 driver.
+- System timer (PIT/IRQ0) driven blinking text cursor with interrupt-safe busy guards (`VGA_BUSY`).
+- Premium clean-look shell prompt utilizing a single angle bracket (`>`) and subtle host styling.
+- Admin username visual color highlighting (LightRed) to indicate root privilege level.
+
 ## [0.2.0] - 2026-07-02
 
 ### Added

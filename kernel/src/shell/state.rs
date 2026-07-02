@@ -46,11 +46,11 @@ pub struct ShellTheme {
 }
 
 pub static mut CURRENT_THEME: ShellTheme = ShellTheme {
-    user: vga::Color::LightRed,
-    host: vga::Color::LightCyan,
-    path: vga::Color::LightBlue,
+    user: vga::Color::LightGreen,
+    host: vga::Color::LightGrey,
+    path: vga::Color::LightCyan,
     symbol: vga::Color::LightGreen,
-    text_fg: vga::Color::LightGrey,
+    text_fg: vga::Color::White,
     text_bg: vga::Color::Black,
 };
 

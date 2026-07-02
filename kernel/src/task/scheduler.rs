@@ -108,6 +108,8 @@ pub unsafe fn exit_current() {
 /// Preemptive scheduler tick called from PIT timer interrupt
 #[no_mangle]
 pub unsafe extern "C" fn schedule_tick(current_rsp: u64) -> u64 {
+    crate::io::vga::handle_timer_tick();
+
     if !SCHEDULER_INITIALIZED {
         return current_rsp;
     }

@@ -5,10 +5,6 @@
 use crate::io::vga;
 use crate::shell::state::*;
 
-extern "C" {
-    fn vga_init();
-}
-
 pub fn run(parts: &mut core::str::SplitWhitespace) {
     let theme_name = match parts.next() {
         Some(name) => name,
@@ -87,7 +83,7 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
             // Set the new text color attribute in the driver
             vga::set_color(CURRENT_THEME.text_fg, CURRENT_THEME.text_bg);
             // Re-initialize the screen to clear it using the new theme background color
-            vga_init();
+            vga::init();
             vga::print_str("Theme changed successfully!\n");
         }
     }

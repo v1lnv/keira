@@ -4,12 +4,16 @@ use super::state::*;
 use crate::io::vga;
 
 extern "C" {
-    pub fn vga_init();
     pub fn get_uptime_ms() -> u64;
     pub fn rtc_get_time(time: *mut RtcTime);
     pub fn heap_get_total() -> usize;
     pub fn heap_get_used() -> usize;
     pub fn heap_get_free() -> usize;
+}
+
+/// Safe re-export of vga::init() for use by shell command modules.
+pub fn vga_init() {
+    vga::init();
 }
 
 #[repr(C)]

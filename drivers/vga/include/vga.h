@@ -81,11 +81,13 @@ void vga_backspace(void);
  * Draw a mouse cursor at the specified coordinates by inverting colors.
  */
 void vga_draw_mouse(uint16_t x, uint16_t y);
+void vga_draw_mouse_text(uint16_t x, uint16_t y);
 
 /**
  * Clear the mouse cursor at the specified coordinates.
  */
 void vga_clear_mouse(uint16_t x, uint16_t y);
+void vga_clear_mouse_text(uint16_t x, uint16_t y);
 
 /**
  * Enable and configure the hardware blinking cursor.

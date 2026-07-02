@@ -17,21 +17,14 @@ use executor::execute_command;
 use history::{history_load, history_push};
 use state::*;
 
-// External C functions
-extern "C" {
-    fn vga_backspace();
-    fn vga_get_cursor_col() -> u16;
-    fn vga_get_cursor_row() -> u16;
-    fn vga_set_cursor_pos(row: u16, col: u16);
-    fn vga_clear_line_from(col: u16);
-}
+
 
 /// Print the Keira ASCII Logo
 pub fn print_logo() {
     unsafe {
         vga::set_color(CURRENT_THEME.text_fg, CURRENT_THEME.text_bg);
     }
-    vga::print_str("Keira Kernel 0.2.0-keira-1 (tty1)\n\n");
+    vga::print_str("Keira Kernel 0.3.0-keira-1 (tty1)\n\n");
 }
 
 /// Print the shell prompt and record cursor position
@@ -45,7 +38,12 @@ pub unsafe fn get_current_user_home() -> &'static str {
 
 pub fn print_prompt() {
     unsafe {
-        vga::set_color(CURRENT_THEME.user, CURRENT_THEME.text_bg);
+        let user_color = if IS_ADMIN {
+            vga::Color::LightRed
+        } else {
+            CURRENT_THEME.user
+        };
+        vga::set_color(user_color, CURRENT_THEME.text_bg);
         if let Ok(user_str) = core::str::from_utf8(&CURRENT_USER[..CURRENT_USER_LEN]) {
             vga::print_str(user_str);
         } else {
@@ -83,15 +81,15 @@ pub fn print_prompt() {
         }
 
         vga::set_color(CURRENT_THEME.symbol, CURRENT_THEME.text_bg);
-        vga::putchar(175); // » character in CP437
+        vga::putchar(b'>');
         vga::print_str(" ");
         vga::set_color(CURRENT_THEME.text_fg, CURRENT_THEME.text_bg);
     }
 
     // Save cursor position right after prompt for history navigation
     unsafe {
-        PROMPT_COL = vga_get_cursor_col();
-        PROMPT_ROW = vga_get_cursor_row();
+        PROMPT_COL = vga::get_cursor_col();
+        PROMPT_ROW = vga::get_cursor_row();
     }
 }
 
@@ -153,7 +151,7 @@ pub extern "C" fn shell_handle_keypress(c: u8) {
                 if BUFFER_LEN > 0 {
                     BUFFER_LEN -= 1;
                     INPUT_BUFFER[BUFFER_LEN] = 0;
-                    vga_backspace();
+                    vga::backspace();
                 }
             }
             // Enter
@@ -192,8 +190,8 @@ pub extern "C" fn shell_handle_keypress(c: u8) {
                     history_load(idx);
                 } else {
                     HISTORY_INDEX = -1;
-                    vga_set_cursor_pos(PROMPT_ROW, PROMPT_COL);
-                    vga_clear_line_from(PROMPT_COL);
+                    vga::set_cursor_pos(PROMPT_ROW, PROMPT_COL);
+                    vga::clear_line_from(PROMPT_COL);
                     BUFFER_LEN = 0;
                 }
             }

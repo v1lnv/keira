@@ -42,7 +42,7 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
         crate::io::vga::print_boot_log(msg_str, 0);
     }
 
-    // Parse Multiboot2 info to find initrd module
+    // Parse Multiboot2 info to find initrd module and framebuffer info
     let mut initrd_start = 0u64;
     let mut initrd_end = 0u64;
     unsafe {
@@ -57,6 +57,14 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
                 // Module tag
                 initrd_start = *((addr + 8) as *const u32) as u64;
                 initrd_end = *((addr + 12) as *const u32) as u64;
+            }
+            if tag_type == 8 {
+                // Framebuffer info tag
+                crate::io::vga::FRAMEBUFFER_ADDR = *((addr + 8) as *const u64);
+                crate::io::vga::FRAMEBUFFER_PITCH = *((addr + 16) as *const u32);
+                crate::io::vga::FRAMEBUFFER_WIDTH = *((addr + 20) as *const u32);
+                crate::io::vga::FRAMEBUFFER_HEIGHT = *((addr + 24) as *const u32);
+                crate::io::vga::FRAMEBUFFER_BPP = *((addr + 28) as *const u8);
             }
             // Align to 8 bytes
             addr += ((tag_size as u64) + 7) & !7;
@@ -77,6 +85,30 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
     let heap_end_addr = unsafe { &__heap_end as *const u8 as u64 };
     unsafe {
         crate::mem::init(multiboot_info_ptr, initrd_end, heap_end_addr);
+        
+        // Map linear framebuffer pages in VMM paging tables
+        let fb_addr = crate::io::vga::FRAMEBUFFER_ADDR;
+        let fb_pitch = crate::io::vga::FRAMEBUFFER_PITCH;
+        let fb_height = crate::io::vga::FRAMEBUFFER_HEIGHT;
+        if fb_addr != 0 {
+            let fb_size = fb_height as u64 * fb_pitch as u64;
+            let page_count = (fb_size + 4095) / 4096;
+            for i in 0..page_count {
+                let offset = i * 4096;
+                let phys = fb_addr + offset;
+                let _ = crate::mem::vmm::map_page(phys, phys, crate::mem::vmm::PAGE_WRITABLE);
+            }
+            // Safely mark framebuffer mapped and disable C text-mode VGA driver
+            extern "C" {
+                fn vga_set_fb_mode(enabled: u8);
+                fn mouse_set_resolution(width: i32, height: i32);
+            }
+            vga_set_fb_mode(1);
+            let fb_width = crate::io::vga::FRAMEBUFFER_WIDTH;
+            mouse_set_resolution(fb_width as i32, fb_height as i32);
+            crate::io::vga::FRAMEBUFFER_MAPPED = true;
+            crate::io::vga::init();
+        }
     }
     crate::io::vga::print_boot_log("Initializing Physical Memory Manager (PMM) frames", 0);
     crate::io::vga::print_boot_log("Initializing Virtual Memory Manager (VMM) paging", 0);
@@ -143,19 +175,14 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
     crate::io::vga::print_boot_log("Spawning interactive terminal shell environment", 0);
 
     // Clear the screen at the end of boot to present a clean prompt
-    extern "C" {
-        fn vga_init();
-    }
-    unsafe {
-        vga_init();
-    }
+    crate::io::vga::init();
 
     // Welcome banner to VGA (minimalist Arch style, tty interface)
     crate::io::vga::set_color(
         crate::io::vga::Color::LightGrey,
         crate::io::vga::Color::Black,
     );
-    crate::io::vga::print_str("Keira Kernel 0.2.0-keira-1 (tty1)\n\n");
+    crate::io::vga::print_str("Keira Kernel 0.3.0-keira-1 (tty1)\n\n");
 
     // Also print a clean initialization log to Serial Console
     crate::io::serial::print_str("\x1b[1;34m::\x1b[0m Keira Kernel initialized successfully. System ready                  \x1b[1;32m[ OK ]\x1b[0m\n");

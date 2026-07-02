@@ -3,12 +3,6 @@
 use super::state::*;
 use crate::io::vga;
 
-extern "C" {
-    fn vga_init();
-    fn vga_get_cursor_col() -> u16;
-    fn vga_set_cursor_pos(row: u16, col: u16);
-}
-
 unsafe fn editor_save_file() -> Result<(), &'static str> {
     let mut flat_buf = [0u8; 2048];
     let mut flat_len = 0;
@@ -107,18 +101,18 @@ pub unsafe fn editor_start(filename: &str) -> Result<(), &'static str> {
 }
 
 pub unsafe fn editor_redraw() {
-    vga_init();
+    vga::init();
 
     // 1. Draw top bar (Header)
     vga::set_color(vga::Color::White, vga::Color::DarkGrey);
-    vga::print_str("  Keira Text Editor 0.2.0  |  File: ");
+    vga::print_str("  Keira Text Editor 0.3.0  |  File: ");
     let filename_slice = &EDIT_FILENAME[..EDIT_FILENAME_LEN];
     if let Ok(name_str) = core::str::from_utf8(filename_slice) {
         vga::print_str(name_str);
     }
     vga::print_str(" ");
 
-    let mut current_col = vga_get_cursor_col();
+    let mut current_col = vga::get_cursor_col();
     while current_col < 80 {
         vga::print_str(" ");
         current_col += 1;
@@ -126,7 +120,7 @@ pub unsafe fn editor_redraw() {
 
     // 2. Draw grid content with syntax highlighting and line numbers
     for y in 0..23 {
-        vga_set_cursor_pos((y + 1) as u16, 0);
+        vga::set_cursor_pos((y + 1) as u16, 0);
 
         // Render line number gutter (e.g. " 1 | ")
         let val = (y + 1) as u8;
@@ -450,7 +444,7 @@ pub unsafe fn editor_redraw() {
     }
 
     // 3. Draw bottom bar (Help/Status/Search)
-    vga_set_cursor_pos(24, 0);
+    vga::set_cursor_pos(24, 0);
     if EDITOR_CONFIRM_SAVE {
         vga::set_color(vga::Color::White, vga::Color::DarkGrey);
         vga::print_str("  Save changes? [Y] Yes  [N] No  [C] Cancel");
@@ -473,7 +467,7 @@ pub unsafe fn editor_redraw() {
         vga::print_str("  ESC: Exit  |  Ctrl+F: Search  |  Ctrl+S: Save  |  Ctrl+Q: Save & Exit");
     }
 
-    let mut current_col = vga_get_cursor_col();
+    let mut current_col = vga::get_cursor_col();
     while current_col < 80 {
         vga::print_str(" ");
         current_col += 1;
@@ -482,11 +476,11 @@ pub unsafe fn editor_redraw() {
     vga::set_color(vga::Color::LightGrey, vga::Color::Black);
 
     if EDITOR_CONFIRM_SAVE {
-        vga_set_cursor_pos(24, 45);
+        vga::set_cursor_pos(24, 45);
     } else if IN_SEARCH_MODE {
-        vga_set_cursor_pos(24, (10 + SEARCH_LEN) as u16);
+        vga::set_cursor_pos(24, (10 + SEARCH_LEN) as u16);
     } else {
-        vga_set_cursor_pos(EDIT_CUR_Y + 1, EDIT_CUR_X + 5);
+        vga::set_cursor_pos(EDIT_CUR_Y + 1, EDIT_CUR_X + 5);
     }
 }
 
@@ -495,7 +489,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
         match c {
             b'y' | b'Y' => {
                 if let Err(e) = editor_save_file() {
-                    vga_init();
+                    vga::init();
                     vga::set_color(vga::Color::LightRed, vga::Color::Black);
                     vga::print_str("Error saving file: ");
                     vga::print_str(e);
@@ -506,12 +500,12 @@ pub unsafe fn editor_handle_keypress(c: u8) {
                     return;
                 }
                 IN_EDITOR_MODE = false;
-                vga_init();
+                vga::init();
                 super::print_prompt();
             }
             b'n' | b'N' => {
                 IN_EDITOR_MODE = false;
-                vga_init();
+                vga::init();
                 super::print_prompt();
             }
             b'c' | b'C' | 27 => {
@@ -525,7 +519,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
 
     if EDITOR_CONFIRM_EXIT {
         IN_EDITOR_MODE = false;
-        vga_init();
+        vga::init();
         super::print_prompt();
         return;
     }
@@ -635,7 +629,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
     // Ctrl+Q (17) Save & Exit shortcut
     if c == 17 {
         if let Err(e) = editor_save_file() {
-            vga_init();
+            vga::init();
             vga::set_color(vga::Color::LightRed, vga::Color::Black);
             vga::print_str("Error saving file: ");
             vga::print_str(e);
@@ -645,7 +639,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
             EDITOR_CONFIRM_EXIT = true;
         } else {
             IN_EDITOR_MODE = false;
-            vga_init();
+            vga::init();
             super::print_prompt();
         }
         return;

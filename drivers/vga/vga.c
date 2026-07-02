@@ -32,6 +32,11 @@
 static uint16_t cursor_row;
 static uint16_t cursor_col;
 static uint8_t current_attr = 0x07; // Default: Light Grey on Black
+static uint8_t vga_fb_mode = 0;     // Set to 1 when running in LFB graphics mode
+
+void vga_set_fb_mode(uint8_t enabled) {
+    vga_fb_mode = enabled;
+}
 
 static uint16_t mouse_cursor_x = 0xFFFF;
 static uint16_t mouse_cursor_y = 0xFFFF;
@@ -58,9 +63,10 @@ static void vga_show_mouse_internal(void) {
         // Custom premium pointer: Windows/Linux style white arrow on transparent background
         uint8_t pointer_char = 24; // '↑'
         uint8_t pointer_attr;
-        
+
         // Dynamic contrast: use black arrow if background is light, white arrow otherwise
-        if (bg == VGA_COLOR_WHITE || bg == VGA_COLOR_LIGHT_GREY || bg == VGA_COLOR_YELLOW || bg == VGA_COLOR_LIGHT_CYAN) {
+        if (bg == VGA_COLOR_WHITE || bg == VGA_COLOR_LIGHT_GREY || bg == VGA_COLOR_YELLOW ||
+            bg == VGA_COLOR_LIGHT_CYAN) {
             pointer_attr = VGA_COLOR_BLACK | (bg << 4);
         } else {
             pointer_attr = VGA_COLOR_WHITE | (bg << 4);
@@ -149,6 +155,8 @@ void vga_enable_cursor(uint8_t cursor_start, uint8_t cursor_end) {
 /* Public API Implementation */
 
 void vga_init(void) {
+    if (vga_fb_mode)
+        return;
     vga_hide_mouse_internal();
     cursor_row = 0;
     cursor_col = 0;
@@ -166,10 +174,14 @@ void vga_init(void) {
 }
 
 void vga_set_color(uint8_t fg, uint8_t bg) {
+    if (vga_fb_mode)
+        return;
     current_attr = vga_make_color(fg, bg);
 }
 
 void vga_putchar(char c) {
+    if (vga_fb_mode)
+        return;
     vga_hide_mouse_internal();
     if (c == '\n') {
         /* Newline: move to start of next row */
@@ -206,6 +218,8 @@ void vga_print(const char *str) {
 }
 
 void vga_backspace(void) {
+    if (vga_fb_mode)
+        return;
     vga_hide_mouse_internal();
     if (cursor_col == 0) {
         if (cursor_row > 0) {
@@ -222,14 +236,14 @@ void vga_backspace(void) {
     vga_show_mouse_internal();
 }
 
-void vga_draw_mouse(uint16_t x, uint16_t y) {
+void vga_draw_mouse_text(uint16_t x, uint16_t y) {
     vga_hide_mouse_internal();
     mouse_cursor_x = x;
     mouse_cursor_y = y;
     vga_show_mouse_internal();
 }
 
-void vga_clear_mouse(uint16_t x, uint16_t y) {
+void vga_clear_mouse_text(uint16_t x, uint16_t y) {
     (void)x;
     (void)y;
     vga_hide_mouse_internal();
@@ -250,6 +264,8 @@ void vga_set_cursor_pos(uint16_t row, uint16_t col) {
 }
 
 void vga_clear_line_from(uint16_t col) {
+    if (vga_fb_mode)
+        return;
     vga_hide_mouse_internal();
     uint16_t blank = vga_make_entry(' ', current_attr);
     for (uint16_t c = col; c < VGA_WIDTH; c++) {

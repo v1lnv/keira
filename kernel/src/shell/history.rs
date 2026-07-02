@@ -3,11 +3,6 @@
 use super::state::*;
 use crate::io::vga;
 
-extern "C" {
-    fn vga_set_cursor_pos(row: u16, col: u16);
-    fn vga_clear_line_from(col: u16);
-}
-
 pub unsafe fn history_push() {
     if BUFFER_LEN == 0 {
         return;
@@ -23,8 +18,8 @@ pub unsafe fn history_push() {
 
 /// Replace current input buffer with history entry and redraw
 pub unsafe fn history_load(idx: usize) {
-    vga_set_cursor_pos(PROMPT_ROW, PROMPT_COL);
-    vga_clear_line_from(PROMPT_COL);
+    vga::set_cursor_pos(PROMPT_ROW, PROMPT_COL);
+    vga::clear_line_from(PROMPT_COL);
 
     BUFFER_LEN = HISTORY_LENS[idx];
     for i in 0..BUFFER_LEN {
