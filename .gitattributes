@@ -1,0 +1,39 @@
+# Keira Kernel: Git Attributes Configuration
+# Tells Git how to handle line endings, diffing, and merge strategies for
+# specific paths/extensions.
+
+# Default Behavior
+# Auto-detect text files and normalize line endings to LF on commit
+* text=auto eol=lf
+
+# Source Code Files (Force LF line endings)
+*.rs text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.asm text eol=lf
+*.inc text eol=lf
+*.ld text eol=lf
+Makefile text eol=lf
+
+# Configuration Files (Force LF line endings)
+*.toml text eol=lf
+*.json text eol=lf
+*.cfg text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.editorconfig text eol=lf
+.clang-format text eol=lf
+.clang-tidy text eol=lf
+.clang-format-ignore text eol=lf
+rustfmt.toml text eol=lf
+README.md text eol=lf
+
+# Binary Files (Prevent Line-Ending Normalization/Corruption)
+# Explicitly flag binary assets so Git does not modify their bytes
+*.bin binary
+*.iso binary
+*.img binary
+*.tar binary
+*.png binary
+*.jpg binary
+*.ico binary

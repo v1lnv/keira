@@ -1,0 +1,14 @@
+# Keira Kernel: Clang-Tidy Static Analysis Configuration
+# Configures diagnostic checks and static analysis rules for the C codebase.
+# Custom-tailored for a freestanding/bare-metal kernel environment.
+
+---
+# Enable all clang compiler diagnostics and static analyzer warnings,
+# except for insecure API suggestions that require the standard user-space C library.
+Checks: 'clang-diagnostic-*,clang-analyzer-*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
+
+# Treat all warnings as warnings (do not block build automatically unless configured)
+WarningsAsErrors: ''
+
+# Run static analysis check on all header files in the project
+HeaderFilterRegex: '.*'

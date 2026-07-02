@@ -1,0 +1,36 @@
+# Keira Kernel: Cargo Configuration
+#
+# This is a library crate that produces a static library (.a file) containing
+# all Rust kernel code. The static library is linked with ASM and C objects
+# by the Makefile to produce the final kernel binary.
+#
+# Crate type staticlib generates a C-compatible .a archive that can be
+# consumed by any standard linker (ld, lld, gold).
+
+[package]
+name = "keira"
+version = "0.1.0"
+edition = "2021"
+authors = ["v1lnv <v1lnv@proton.me>"]
+description = "Keira x86_64 kernel: Rust core module (no_std, freestanding)"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/v1lnv/keira"
+repository = "https://github.com/v1lnv/keira"
+keywords = ["kernel", "os", "freestanding", "x86_64", "no_std"]
+categories = ["embedded", "no-std", "os-development"]
+
+# Produce a static library for linking with C and ASM objects
+[lib]
+name = "keira_kernel"
+path = "kernel/src/lib.rs"
+crate-type = ["staticlib"]
+
+# Abort on panic instead of unwinding (unwinding requires std)
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+opt-level = 3          # Max speed optimization
+lto = true             # Link-Time Optimization
+codegen-units = 1      # Enables aggressive optimization across modules

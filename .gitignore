@@ -1,0 +1,46 @@
+# Keira Kernel: Git Ignore Configuration
+# Tells Git which files and directories to ignore. This is customized for a
+# hybrid Rust/C/Assembly bare-metal operating system project.
+
+# Build Artifacts & Output Directories
+build/
+target/
+*.o
+*.d
+*.a
+*.bin
+*.iso
+*.elf
+
+# Disk & File System Images
+disk.img
+initrd.tar
+build/boot.sh
+
+# Debugging & Logs
+*.log
+.gdb_history
+
+# Editor, IDE, & Operating System Files
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+
+# JetBrains IDEs (CLike, CLion, RustRover)
+.idea/
+*.iml
+
+# Microsoft Visual Studio
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Vim / Emacs Swap and Backup files
+*.sw?
+*~
+.#*
+
+# OS-specific cache files
+.DS_Store
+Thumbs.db

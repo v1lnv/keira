@@ -1,0 +1,181 @@
+//! Keira Kernel: Rust Entry Point
+//!
+//! This is the Rust kernel's main entry point, called by the ASM trampoline
+//! (entry64.asm) after C hardware initialization (hw_init) completes.
+//!
+//! Call chain: GRUB → _start (ASM 32-bit) → _start64 (ASM 64-bit)
+//!           → hw_init() (C) → kernel_main() (Rust, this function)
+//!
+//! At this point:
+//!   - CPU is in 64-bit long mode
+//!   - First 2MB is identity-mapped
+//!   - Serial port (COM1) is initialized
+//!   - VGA text mode is initialized and screen is cleared
+//!   - BSS is zeroed
+
+use crate::shell;
+
+/// Kernel main entry point : the heart of Keira.
+///
+/// This function is called via C ABI from the assembly trampoline.
+/// The `-> !` return type guarantees to the compiler (and the CPU) that
+/// this function will never return : it either runs forever or halts.
+#[no_mangle]
+pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
+    // Extensive unified boot log
+    crate::io::vga::print_boot_log("Landed in 64-bit Rust kernel entry context", 0);
+    crate::io::vga::print_boot_log("Checking Multiboot2 bootloader magic signature", 0);
+    crate::io::vga::print_boot_log("Validating 4-level page frame identity mapping (1GB)", 0);
+    crate::io::vga::print_boot_log("Confirming active CPU x86_64 Long Mode status", 0);
+
+    // CPU detection log
+    let cpuid = core::arch::x86_64::__cpuid(0);
+    let mut vendor = [0u8; 12];
+    vendor[0..4].copy_from_slice(&cpuid.ebx.to_le_bytes());
+    vendor[4..8].copy_from_slice(&cpuid.edx.to_le_bytes());
+    vendor[8..12].copy_from_slice(&cpuid.ecx.to_le_bytes());
+
+    let mut cpuid_msg = [0u8; 33];
+    cpuid_msg[0..21].copy_from_slice(b"Detected CPU Vendor: ");
+    cpuid_msg[21..33].copy_from_slice(&vendor);
+    if let Ok(msg_str) = core::str::from_utf8(&cpuid_msg) {
+        crate::io::vga::print_boot_log(msg_str, 0);
+    }
+
+    // Parse Multiboot2 info to find initrd module
+    let mut initrd_start = 0u64;
+    let mut initrd_end = 0u64;
+    unsafe {
+        let mut addr = multiboot_info_ptr + 8; // skip total_size and reserved
+        loop {
+            let tag_type = *(addr as *const u32);
+            let tag_size = *((addr + 4) as *const u32);
+            if tag_type == 0 {
+                break; // End tag
+            }
+            if tag_type == 3 {
+                // Module tag
+                initrd_start = *((addr + 8) as *const u32) as u64;
+                initrd_end = *((addr + 12) as *const u32) as u64;
+            }
+            // Align to 8 bytes
+            addr += ((tag_size as u64) + 7) & !7;
+        }
+    }
+
+    if initrd_start != 0 {
+        crate::fs::tar::init(initrd_start, initrd_end);
+        crate::io::vga::print_boot_log("Mounting read-only Initrd USTAR boot archive", 0);
+    } else {
+        crate::io::vga::print_boot_log("Mounting read-only Initrd USTAR boot archive", 2);
+    }
+
+    // Initialize physical & virtual memory management
+    extern "C" {
+        static __heap_end: u8;
+    }
+    let heap_end_addr = unsafe { &__heap_end as *const u8 as u64 };
+    unsafe {
+        crate::mem::init(multiboot_info_ptr, initrd_end, heap_end_addr);
+    }
+    crate::io::vga::print_boot_log("Initializing Physical Memory Manager (PMM) frames", 0);
+    crate::io::vga::print_boot_log("Initializing Virtual Memory Manager (VMM) paging", 0);
+
+    // Initialize scheduler
+    unsafe {
+        crate::task::init();
+    }
+    crate::io::vga::print_boot_log("Initializing Preemptive Round-Robin Thread Scheduler", 0);
+
+    // Initialize FAT filesystem
+    unsafe {
+        if let Ok(sectors) = crate::io::ide::identify() {
+            crate::io::ide::IDE_DEVICE.size_sectors = sectors;
+            let _ = crate::io::block::register_device(&*core::ptr::addr_of!(
+                crate::io::ide::IDE_DEVICE
+            ));
+            let _ = crate::io::block::mount_device("ide0");
+        }
+
+        match crate::fs::fat::init() {
+            Ok(_) => {
+                crate::io::vga::print_boot_log("Probing IDE primary master storage controller", 0);
+                crate::io::vga::print_boot_log("Registering active storage block device drives", 0);
+                crate::io::vga::print_boot_log(
+                    "Mounting and initializing FAT16 file system driver",
+                    0,
+                );
+            }
+            Err(e) => {
+                let mut err_msg = [0u8; 80];
+                let prefix = b"Mounting and initializing FAT16 file system driver (Error: ";
+                let suffix = b")";
+                let mut offset = 0;
+                err_msg[offset..offset + prefix.len()].copy_from_slice(prefix);
+                offset += prefix.len();
+                let e_bytes = e.as_bytes();
+                let to_copy = core::cmp::min(e_bytes.len(), err_msg.len() - offset - suffix.len());
+                err_msg[offset..offset + to_copy].copy_from_slice(&e_bytes[..to_copy]);
+                offset += to_copy;
+                err_msg[offset..offset + suffix.len()].copy_from_slice(suffix);
+                offset += suffix.len();
+                if let Ok(msg_str) = core::str::from_utf8(&err_msg[..offset]) {
+                    crate::io::vga::print_boot_log(msg_str, 1);
+                } else {
+                    crate::io::vga::print_boot_log(
+                        "Mounting and initializing FAT16 file system driver",
+                        1,
+                    );
+                }
+            }
+        }
+    }
+
+    // Initialize GDT/TSS & User Mode system calls
+    unsafe {
+        crate::syscall::init_user_mode();
+    }
+    crate::io::vga::print_boot_log("Re-configuring Global Descriptor Table (GDT) segments", 0);
+    crate::io::vga::print_boot_log("Loading Task State Segment (TSS) cpu context structure", 0);
+    crate::io::vga::print_boot_log("Enabling CPU ring 3 user-mode syscall interface MSRs", 0);
+
+    // Spawning interactive shell log
+    crate::io::vga::print_boot_log("Spawning interactive terminal shell environment", 0);
+
+    // Clear the screen at the end of boot to present a clean prompt
+    extern "C" {
+        fn vga_init();
+    }
+    unsafe {
+        vga_init();
+    }
+
+    // Welcome banner to VGA (minimalist Arch style, tty interface)
+    crate::io::vga::set_color(
+        crate::io::vga::Color::LightGrey,
+        crate::io::vga::Color::Black,
+    );
+    crate::io::vga::print_str("Keira Kernel 0.1.0-keira-1 (tty1)\n\n");
+
+    // Also print a clean initialization log to Serial Console
+    crate::io::serial::print_str("\x1b[1;34m::\x1b[0m Keira Kernel initialized successfully. System ready                  \x1b[1;32m[ OK ]\x1b[0m\n");
+
+    // Enable CPU interrupts
+    unsafe {
+        core::arch::asm!("sti");
+    }
+
+    // Run startup script
+    shell::run_boot_script();
+
+    // Print initial shell prompt
+    shell::print_prompt();
+
+    // Idle loop (wait for interrupts like keyboard presses)
+    loop {
+        shell::process_pending();
+        unsafe {
+            core::arch::asm!("hlt");
+        }
+    }
+}

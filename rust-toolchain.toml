@@ -1,0 +1,12 @@
+# Keira Kernel: Rust Toolchain Override
+# Pins this project to the nightly toolchain. The nightly channel is required
+# for building bare-metal targets because:
+#   1. It supports `-Z build-std=core` to compile the core library from source.
+#   2. It supports custom JSON target specifications (`-Z json-target-spec`).
+#
+# This file automatically overrides the default toolchain when entering the
+# project directory (using rustup).
+
+[toolchain]
+channel = "nightly"
+components = ["rust-src"]

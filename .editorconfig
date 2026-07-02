@@ -1,0 +1,35 @@
+# Keira Kernel: EditorConfig Configuration
+# EditorConfig helps developers define and maintain consistent coding styles
+# between different editors and IDEs. See http://editorconfig.org
+
+root = true
+
+# Global Defaults
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Makefiles (Tabs are required for targets/commands)
+[Makefile]
+indent_style = tab
+indent_size = 8
+tab_width = 8
+
+# Source Code Files (C, C++ Headers, Rust, Assembly, Linker Scripts, Constants)
+[*.{c,h,rs,asm,inc,ld}]
+indent_style = space
+indent_size = 4
+
+# Serialization & Markup Configurations (JSON, TOML)
+[*.{json,toml}]
+indent_style = space
+indent_size = 4
+
+# Markdown Files (Preserve trailing spaces for line breaks)
+[*.md]
+trim_trailing_whitespace = false
+indent_size = 2

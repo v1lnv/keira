@@ -1,0 +1,17 @@
+# Keira Kernel: Rustfmt Code Formatting Configuration
+# Customizes the behavior of `cargo fmt` / `rustfmt` for this project.
+
+# Maximum line length before wrapping code (100 characters matches modern monitors)
+max_width = 100
+
+# Number of spaces to use for indentation
+tab_spaces = 4
+
+# Force Unix (LF) line endings (matches eol=lf in .gitattributes and .editorconfig)
+newline_style = "Unix"
+
+# Target Rust edition for parsing syntax
+edition = "2021"
+
+# Use default heuristic rules to decide when to collapse small blocks onto a single line
+use_small_heuristics = "Default"

@@ -1,0 +1,5 @@
+# Ignore build output and target files
+build/
+target/
+*.img
+*.tar

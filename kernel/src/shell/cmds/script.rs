@@ -1,0 +1,76 @@
+#![allow(unused_imports, unused_variables, unused_unsafe)]
+//! Keira Kernel: Shell Command 'script'
+//!
+//! Implementation of the 'script' shell command.
+
+use crate::io::vga;
+use crate::shell::editor::editor_start;
+use crate::shell::executor::{
+    check_write_permission, demo_task_1, demo_task_2, execute_command_inner, get_current_user_home,
+    get_uptime_ms, heap_get_free, heap_get_total, heap_get_used, is_admin_mode, rtc_get_time,
+    vga_init, RtcTime,
+};
+use crate::shell::state::*;
+
+pub fn run(parts: &mut core::str::SplitWhitespace) {
+    unsafe {
+        let arg = match parts.next() {
+            Some(s) => s,
+            None => {
+                vga::print_str("Usage: runscript <filename.sh>\n");
+                return;
+            }
+        };
+        unsafe {
+            let mut buf = [0u8; 4096];
+            let read_res = match crate::fs::fat::read_file_content(arg, &mut buf) {
+                Ok(len) => Ok(len),
+                Err(_) => crate::fs::tar::read_file_content(arg, &mut buf),
+            };
+            match read_res {
+                Ok(len) => {
+                    let content = &buf[..len];
+                    let mut line_start = 0;
+                    for i in 0..=len {
+                        if i == len || content[i] == b'\n' || content[i] == b'\r' {
+                            if i > line_start {
+                                let line_bytes = &content[line_start..i];
+                                let mut start = 0;
+                                let mut end = line_bytes.len();
+                                while start < end
+                                    && (line_bytes[start] == b' '
+                                        || line_bytes[start] == b'\t'
+                                        || line_bytes[start] == b'\r')
+                                {
+                                    start += 1;
+                                }
+                                while end > start
+                                    && (line_bytes[end - 1] == b' '
+                                        || line_bytes[end - 1] == b'\t'
+                                        || line_bytes[end - 1] == b'\r')
+                                {
+                                    end -= 1;
+                                }
+                                let trimmed = &line_bytes[start..end];
+                                if !trimmed.is_empty() {
+                                    if let Ok(cmd_str) = core::str::from_utf8(trimmed) {
+                                        vga::print_str("Executing: ");
+                                        vga::print_str(cmd_str);
+                                        vga::print_str("\n");
+                                        execute_command_inner(cmd_str);
+                                    }
+                                }
+                            }
+                            line_start = i + 1;
+                        }
+                    }
+                }
+                Err(e) => {
+                    vga::print_str("script: ");
+                    vga::print_str(e);
+                    vga::print_str("\n");
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,87 @@
+//! Keira Kernel: Task State Segment and GDT/TSS configuration
+
+use crate::mem::pmm;
+
+#[repr(C, packed)]
+pub struct TaskStateSegment {
+    pub reserved0: u32,
+    pub rsp0: u64, // Stack pointer loaded on privilege transition (Ring 3 -> 0)
+    pub rsp1: u64,
+    pub rsp2: u64,
+    pub reserved1: u64,
+    pub ist1: u64,
+    pub ist2: u64,
+    pub ist3: u64,
+    pub ist4: u64,
+    pub ist5: u64,
+    pub ist6: u64,
+    pub ist7: u64,
+    pub reserved2: u64,
+    pub reserved3: u16,
+    pub iopb_offset: u16,
+}
+
+pub static mut TSS: TaskStateSegment = TaskStateSegment {
+    reserved0: 0,
+    rsp0: 0,
+    rsp1: 0,
+    rsp2: 0,
+    reserved1: 0,
+    ist1: 0,
+    ist2: 0,
+    ist3: 0,
+    ist4: 0,
+    ist5: 0,
+    ist6: 0,
+    ist7: 0,
+    reserved2: 0,
+    reserved3: 0,
+    iopb_offset: 104, // Size of TSS, effectively disables I/O port bitmap
+};
+
+extern "C" {
+    static mut tss_descriptor: [u8; 16];
+    fn reload_gdt();
+    fn load_tss();
+    fn init_syscall_msrs();
+}
+
+/// Initialize User Mode structures: populates GDT TSS entry, reloads GDT,
+/// loads TSS register, and configures syscall MSR registers.
+pub unsafe fn init_user_mode() {
+    let tss_addr = &raw const TSS as u64;
+    let tss_size = core::mem::size_of::<TaskStateSegment>() as u64 - 1;
+
+    // Allocate a dedicated kernel stack page for Ring 3 -> Ring 0 transitions
+    let stack_frame = pmm::alloc_frame().expect("TSS Init: Out of memory for RSP0 stack");
+    TSS.rsp0 = stack_frame + pmm::PAGE_SIZE;
+
+    // Populate TSS descriptor fields in GDT (16-byte descriptor)
+    let desc = &raw mut tss_descriptor;
+
+    // Limit (15:0)
+    *(desc.cast::<u16>()) = tss_size as u16;
+    // Base (15:0)
+    *((desc as u64 + 2) as *mut u16) = (tss_addr & 0xFFFF) as u16;
+    // Base (23:16)
+    *((desc as u64 + 4) as *mut u8) = ((tss_addr >> 16) & 0xFF) as u8;
+    // Access rights (Present, DPL 0, Type 0x9 = 64-bit available TSS)
+    *((desc as u64 + 5) as *mut u8) = 0x89;
+    // Flags (0) and Limit (19:16)
+    *((desc as u64 + 6) as *mut u8) = 0x00;
+    // Base (31:24)
+    *((desc as u64 + 7) as *mut u8) = ((tss_addr >> 24) & 0xFF) as u8;
+    // Base (63:32)
+    *((desc as u64 + 8) as *mut u32) = ((tss_addr >> 32) & 0xFFFFFFFF) as u32;
+    // Reserved
+    *((desc as u64 + 12) as *mut u32) = 0;
+
+    // Reload the global descriptor table
+    reload_gdt();
+
+    // Load the task register with TSS selector (0x30)
+    load_tss();
+
+    // Setup STAR, LSTAR, SFMASK, EFER MSRs for syscall/sysret
+    init_syscall_msrs();
+}
