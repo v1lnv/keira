@@ -29,7 +29,7 @@ Design of interactive terminal user interfaces, autocomplete engines, visual edi
 * [Terminal Shell & TUI Index](shell/README.md)
 * [Shell Event Loop & Input](shell/loop.md)
 * [Full-Screen Text Editor](shell/editor.md)
-* [VGA Theme Engine](shell/themes.md)
+* [Console Theme Engine](shell/themes.md)
 
 ### Development & Integration Guide
 Practical guides for setting up environments, compiling, testing, source-level debugging, and extending the shell.

@@ -41,7 +41,8 @@ Virtual Address
 ```
 
 ### Identity and Custom Mapping
-- **Identity Mapping**: The first 1GB is identity-mapped during boot to allow the kernel and critical device drivers (VGA, COM1) to execute transparently.
+- **Identity Mapping**: The first 1GB is identity-mapped during boot to allow the kernel and critical device drivers (VGA text mode, COM1) to execute transparently.
+- **Linear Framebuffer (LFB) Mapping**: When a graphics mode linear framebuffer is provided by GRUB, the VMM maps the framebuffer's physical memory pages (which can reside above the 1GB boundary) as writable identity-mapped virtual addresses to allow safe widescreen pixel drawing.
 - **Dynamic Paging**: VMM page allocation dynamically maps virtual address pages to physical frames on demand when allocating process space.
 
 ---

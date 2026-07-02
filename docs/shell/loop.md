@@ -17,10 +17,10 @@ The shell runs as a dedicated system thread in the multitasking scheduler:
 
 Keyboard signals generate IRQ1 interrupts:
 - **Scan Codes**: The keyboard driver reads the scan codes from port `0x60` and converts them to ASCII characters.
-- **Backspace Deletion**: Pressing Backspace triggers `vga_backspace()`:
+- **Backspace Deletion**: Pressing Backspace triggers the safe `vga::backspace()` helper:
   1. Decrements the cursor column position.
-  2. Overwrites the character cell with a space `' '`.
-  3. Updates the hardware cursor position.
+  2. Overwrites the character cell/pixel grid with a space `' '`.
+  3. Updates the visual cursor position.
 - **Special Keys**: Arrow keys trigger history navigation. The Tab key triggers autocomplete.
 
 ---
