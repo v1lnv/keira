@@ -33,7 +33,7 @@ jobs:
         run: make
 
       - name: Upload Bootable ISO Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: keira-bootable-iso
           path: build/keira-*.iso
