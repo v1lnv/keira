@@ -119,6 +119,10 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
     }
     crate::io::vga::print_boot_log("Initializing Preemptive Round-Robin Thread Scheduler", 0);
 
+    // Initialize PCI and AHCI
+    crate::io::pci::init();
+    let _ = crate::io::ahci::init();
+
     // Initialize FAT filesystem
     unsafe {
         if let Ok(sectors) = crate::io::ide::identify() {
@@ -182,7 +186,7 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
         crate::io::vga::Color::LightGrey,
         crate::io::vga::Color::Black,
     );
-    crate::io::vga::print_str("Keira Kernel 0.3.1-keira-1 (tty1)\n\n");
+    crate::io::vga::print_str("Keira Kernel 0.4.0-keira-1 (tty1)\n\n");
 
     // Also print a clean initialization log to Serial Console
     crate::io::serial::print_str("\x1b[1;34m::\x1b[0m Keira Kernel initialized successfully. System ready                  \x1b[1;32m[ OK ]\x1b[0m\n");

@@ -36,3 +36,4 @@ pub mod view;
 pub mod wait;
 pub mod wipe;
 pub mod write;
+pub mod pci;

@@ -271,6 +271,7 @@ pub fn execute_command_inner(cmd: &str) {
         "history" => super::cmds::history::run(&mut parts),
         "move" => super::cmds::r#move::run(&mut parts),
         "theme" => super::cmds::theme::run(&mut parts),
+        "pci" => super::cmds::pci::run(&mut parts),
         _ => {
             // Check if the command exists on disk/initrd at /system/bin/
             let found_in_path = unsafe {

@@ -24,3 +24,6 @@ pub mod block;
 
 /// RAM Disk Block Device
 pub mod ramdisk;
+
+/// AHCI SATA Driver
+pub mod ahci;

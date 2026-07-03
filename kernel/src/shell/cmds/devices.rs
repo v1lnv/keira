@@ -22,6 +22,6 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
                 return;
             }
         }
-        crate::io::pci::scan_buses();
+        crate::io::pci::init();
     }
 }

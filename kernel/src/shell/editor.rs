@@ -105,7 +105,7 @@ pub unsafe fn editor_redraw() {
 
     // 1. Draw top bar (Header)
     vga::set_color(vga::Color::White, vga::Color::DarkGrey);
-    vga::print_str("  Keira Text Editor 0.3.1  |  File: ");
+    vga::print_str("  Keira Text Editor 0.4.0  |  File: ");
     let filename_slice = &EDIT_FILENAME[..EDIT_FILENAME_LEN];
     if let Ok(name_str) = core::str::from_utf8(filename_slice) {
         vga::print_str(name_str);

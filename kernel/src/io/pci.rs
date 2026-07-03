@@ -1,128 +1,156 @@
-//! Keira Kernel: PCI Bus Access Driver
+//! Keira Kernel: PCI Bus Scanner
 //!
-//! Provides basic mechanisms for scanning the PCI bus and accessing PCI configuration space.
+//! Scans the PCI bus and registers all present hardware devices,
+//! detecting vendor IDs, device IDs, class codes, and base addresses (BARs).
 
-use crate::io::vga;
-use core::arch::asm;
-
-const PCI_CONFIG_ADDRESS: u16 = 0xCF8;
+const PCI_CONFIG_ADDR: u16 = 0xCF8;
 const PCI_CONFIG_DATA: u16 = 0xCFC;
 
-unsafe fn outl(port: u16, value: u32) {
-    asm!(
+#[derive(Copy, Clone)]
+pub struct PciDevice {
+    pub bus: u8,
+    pub slot: u8,
+    pub func: u8,
+    pub vendor_id: u16,
+    pub device_id: u16,
+    pub class_code: u8,
+    pub subclass: u8,
+    pub prog_if: u8,
+    pub bar5: u32,
+}
+
+pub static mut PCI_DEVICES: [Option<PciDevice>; 32] = [None; 32];
+pub static mut PCI_DEVICE_COUNT: usize = 0;
+
+// Port I/O helper functions
+unsafe fn outl(port: u16, val: u32) {
+    core::arch::asm!(
         "out dx, eax",
         in("dx") port,
-        in("eax") value,
+        in("eax") val,
         options(nomem, nostack, preserves_flags)
     );
 }
 
 unsafe fn inl(port: u16) -> u32 {
-    let value: u32;
-    asm!(
+    let res: u32;
+    core::arch::asm!(
         "in eax, dx",
-        out("eax") value,
+        out("eax") res,
         in("dx") port,
         options(nomem, nostack, preserves_flags)
     );
-    value
+    res
 }
 
-fn pci_config_read_word(bus: u8, slot: u8, func: u8, offset: u8) -> u16 {
+/// Read 32-bit register from PCI configuration space
+pub unsafe fn pci_read_config_u32(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
     let address = ((bus as u32) << 16)
         | ((slot as u32) << 11)
         | ((func as u32) << 8)
         | ((offset as u32) & 0xFC)
-        | 0x80000000;
+        | 0x8000_0000;
 
-    unsafe {
-        outl(PCI_CONFIG_ADDRESS, address);
-        ((inl(PCI_CONFIG_DATA) >> ((offset & 2) * 8)) & 0xFFFF) as u16
+    outl(PCI_CONFIG_ADDR, address);
+    inl(PCI_CONFIG_DATA)
+}
+
+/// Helper to check if a device is present and get its vendor ID
+unsafe fn get_vendor_id(bus: u8, slot: u8, func: u8) -> u16 {
+    let val = pci_read_config_u32(bus, slot, func, 0);
+    (val & 0xFFFF) as u16
+}
+
+/// Translate PCI class and subclass to human readable strings
+pub fn pci_class_to_str(class: u8, subclass: u8) -> &'static str {
+    match class {
+        0x00 => "Unclassified",
+        0x01 => match subclass {
+            0x00 => "SCSI Controller",
+            0x01 => "IDE Controller",
+            0x02 => "Floppy Controller",
+            0x03 => "IPI Controller",
+            0x04 => "RAID Controller",
+            0x05 => "ATA Controller",
+            0x06 => "SATA Controller (AHCI)",
+            0x07 => "SAS Controller",
+            0x08 => "NVMe Controller",
+            _ => "Storage Controller",
+        },
+        0x02 => "Network Controller",
+        0x03 => "Display Controller (VGA)",
+        0x04 => "Multimedia Controller",
+        0x05 => "Memory Controller",
+        0x06 => "Bridge Device",
+        0x07 => "Simple Comm Controller",
+        0x08 => "System Base Peripheral",
+        0x09 => "Input Device Controller",
+        0x0A => "Docking Station",
+        0x0B => "Processor",
+        0x0C => "Serial Bus (USB/SMBus)",
+        0x0D => "Wireless Controller",
+        0x0E => "Intelligent Controller",
+        0x0F => "Satellite Comm Controller",
+        0x10 => "Encryption Controller",
+        0x11 => "Signal Processing Controller",
+        _ => "Unknown Device Class",
     }
 }
 
-pub fn scan_buses() {
-    vga::set_color(vga::Color::LightBlue, vga::Color::Black);
-    vga::print_str("PCI Bus Scan:\n");
-    vga::print_str("ADDRESS    PCI ID       CLASS     DESCRIPTION\n");
-    vga::set_color(vga::Color::White, vga::Color::Black);
+/// Scan the PCI bus for present hardware devices
+pub fn init() {
+    unsafe {
+        PCI_DEVICE_COUNT = 0;
+        PCI_DEVICES = [None; 32];
 
-    let mut found = 0;
-    for bus in 0..=255 {
-        for slot in 0..32 {
-            let vendor = pci_config_read_word(bus, slot, 0, 0);
-            if vendor != 0xFFFF {
-                let device = pci_config_read_word(bus, slot, 0, 2);
-
-                vga::set_color(vga::Color::LightBlue, vga::Color::Black);
-                // Print Address: BUS:SLOT.0
-                if bus < 16 {
-                    vga::print_str("0");
+        // Loop through all buses (limit to first 8 for boot speed on simple machines)
+        for bus in 0..8 {
+            for slot in 0..32 {
+                let vendor_id = get_vendor_id(bus, slot, 0);
+                if vendor_id == 0xFFFF || vendor_id == 0x0000 {
+                    continue; // Device not present
                 }
-                vga::print_hex(bus as u64);
-                vga::print_str(":");
-                if slot < 16 {
-                    vga::print_str("0");
+
+                // Check header type to see if this is a multi-function device
+                let header_type_reg = pci_read_config_u32(bus, slot, 0, 0x0C);
+                let header_type = ((header_type_reg >> 16) & 0xFF) as u8;
+                let multi_func = (header_type & 0x80) != 0;
+
+                let functions_to_scan = if multi_func { 8 } else { 1 };
+
+                for func in 0..functions_to_scan {
+                    let v_id = get_vendor_id(bus, slot, func);
+                    if v_id == 0xFFFF || v_id == 0x0000 {
+                        continue;
+                    }
+
+                    let dev_id_reg = pci_read_config_u32(bus, slot, func, 0);
+                    let device_id = (dev_id_reg >> 16) as u16;
+
+                    let class_reg = pci_read_config_u32(bus, slot, func, 8);
+                    let class_code = ((class_reg >> 24) & 0xFF) as u8;
+                    let subclass = ((class_reg >> 16) & 0xFF) as u8;
+                    let prog_if = ((class_reg >> 8) & 0xFF) as u8;
+
+                    // BAR5 is at offset 0x24 in standard header
+                    let bar5 = pci_read_config_u32(bus, slot, func, 0x24);
+
+                    if PCI_DEVICE_COUNT < 32 {
+                        PCI_DEVICES[PCI_DEVICE_COUNT] = Some(PciDevice {
+                            bus,
+                            slot,
+                            func,
+                            vendor_id: v_id,
+                            device_id,
+                            class_code,
+                            subclass,
+                            prog_if,
+                            bar5,
+                        });
+                        PCI_DEVICE_COUNT += 1;
+                    }
                 }
-                vga::print_hex(slot as u64);
-                vga::print_str(".0  ");
-
-                // Print PCI ID: VENDOR:DEVICE
-                vga::set_color(vga::Color::White, vga::Color::Black);
-                vga::print_hex(vendor as u64);
-                vga::print_str(":");
-                vga::print_hex(device as u64);
-                vga::print_str("   ");
-
-                let class_word = pci_config_read_word(bus, slot, 0, 0x0A);
-                let subclass = (class_word & 0xFF) as u8;
-                let class = ((class_word >> 8) & 0xFF) as u8;
-
-                // Print Class: CLASS:SUBCLASS
-                vga::set_color(vga::Color::DarkGrey, vga::Color::Black);
-                if class < 16 {
-                    vga::print_str("0");
-                }
-                vga::print_hex(class as u64);
-                vga::print_str(":");
-                if subclass < 16 {
-                    vga::print_str("0");
-                }
-                vga::print_hex(subclass as u64);
-                vga::print_str("   ");
-
-                // Print Description
-                vga::set_color(vga::Color::LightGreen, vga::Color::Black);
-                if class == 0x01 && subclass == 0x01 {
-                    vga::print_str("IDE Controller");
-                } else if class == 0x01 && subclass == 0x06 {
-                    vga::print_str("SATA AHCI Controller");
-                } else if class == 0x01 && subclass == 0x08 {
-                    vga::print_str("NVMe SSD Controller");
-                } else if class == 0x0C && subclass == 0x03 {
-                    vga::print_str("USB Controller");
-                } else if class == 0x03 && subclass == 0x00 {
-                    vga::print_str("VGA Graphics Adapter");
-                } else if class == 0x02 && subclass == 0x00 {
-                    vga::print_str("Ethernet Controller");
-                } else if class == 0x06 && subclass == 0x00 {
-                    vga::print_str("Host/PCI Bridge");
-                } else if class == 0x06 && subclass == 0x01 {
-                    vga::print_str("ISA Bridge");
-                } else {
-                    vga::print_str("Unknown Device");
-                }
-                vga::print_str("\n");
-
-                found += 1;
             }
         }
     }
-
-    vga::set_color(vga::Color::LightBlue, vga::Color::Black);
-    vga::print_str("\nScan complete. Total: ");
-    vga::set_color(vga::Color::White, vga::Color::Black);
-    vga::print_u64(found);
-    vga::print_str(" devices.\n");
-    vga::set_color(vga::Color::LightGrey, vga::Color::Black);
 }

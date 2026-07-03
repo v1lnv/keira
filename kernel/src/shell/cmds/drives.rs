@@ -24,8 +24,13 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
                 vga::print_str(" ");
             }
 
-            let is_ram = name.starts_with("ram");
-            let type_str = if is_ram { "RAM Disk" } else { "IDE Disk" };
+            let type_str = if name.starts_with("ram") {
+                "RAM Disk"
+            } else if name.starts_with("ahci") {
+                "SATA Disk"
+            } else {
+                "IDE Disk"
+            };
             vga::print_str(type_str);
             for _ in 0..(10 - type_str.len()) {
                 vga::print_str(" ");

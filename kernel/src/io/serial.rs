@@ -52,3 +52,39 @@ pub fn print(s: &[u8]) {
 pub fn print_str(s: &str) {
     print(s.as_bytes());
 }
+
+/// Print a 64-bit unsigned integer to the serial port.
+pub fn print_u64(val: u64) {
+    if val == 0 {
+        putchar(b'0');
+        return;
+    }
+    let mut buf = [0u8; 20];
+    let mut i = 20;
+    let mut temp = val;
+    while temp > 0 {
+        i -= 1;
+        buf[i] = b'0' + (temp % 10) as u8;
+        temp /= 10;
+    }
+    print(&buf[i..]);
+}
+
+/// Print a 64-bit hex value to the serial port.
+pub fn print_hex(val: u64) {
+    print_str("0x");
+    let chars = b"0123456789ABCDEF";
+    let mut buf = [0u8; 16];
+    let mut i = 16;
+    let mut temp = val;
+    if temp == 0 {
+        putchar(b'0');
+        return;
+    }
+    while temp > 0 {
+        i -= 1;
+        buf[i] = chars[(temp & 0x0F) as usize];
+        temp >>= 4;
+    }
+    print(&buf[i..]);
+}
