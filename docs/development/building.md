@@ -11,12 +11,17 @@ To compile the kernel from source, the following development utilities are requi
 ### Debian/Ubuntu
 ```bash
 sudo apt-get update
-sudo apt-get install -y nasm gcc xorriso mtools dosfstools grub-common grub-pc-bin
+sudo apt-get install -y nasm gcc xorriso mtools dosfstools grub-common grub-pc-bin qemu-system-x86
 ```
 
 ### Arch Linux
 ```bash
-sudo pacman -Syu nasm gcc xorriso mtools dosfstools grub
+sudo pacman -Syu nasm gcc xorriso mtools dosfstools grub qemu-system-x86
+```
+
+### Fedora
+```bash
+sudo dnf install -y nasm gcc xorriso mtools dosfstools grub2-tools grub2-pc-modules qemu-system-x86
 ```
 
 ---
