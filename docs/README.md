@@ -21,6 +21,7 @@ Detailed analysis of low-level CPU state transitions, memory structures, interru
 Detailed mechanics of storage drivers, raw block access, directory entries, cluster allocations, and boot archives.
 * [Storage & Filesystem Index](storage/README.md)
 * [IDE Block Storage Driver](storage/block.md)
+* [PCI Bus Scanner & AHCI (SATA) Driver](storage/pci_ahci.md)
 * [FAT16 Filesystem Specification](storage/fat16.md)
 * [USTAR Boot RAM Disk (Initrd)](storage/initrd.md)
 
