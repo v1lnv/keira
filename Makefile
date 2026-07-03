@@ -163,7 +163,7 @@ $(DISK_IMG): build/user_test.elf
 	@for driver in serial.sys vga.sys keyboard.sys mouse.sys rtc.sys ide.sys; do \
 	    mcopy -o -i $(DISK_IMG) $(BUILD_DIR)/drivers/$$driver ::/system/drivers/$$driver; \
 	done
-	@echo "color_scheme=arch_retro\nprompt_symbol=»\ncursor=block" > $(BUILD_DIR)/default.cfg
+	@echo "color_scheme=arch_retro\nprompt_symbol=>\ncursor=block" > $(BUILD_DIR)/default.cfg
 	@mcopy -o -i $(DISK_IMG) $(BUILD_DIR)/default.cfg ::/config/theme/default.cfg
 	@echo "[DISK]  Copying binaries and configuration files..."
 	@mcopy -o -i $(DISK_IMG) build/user_test.elf ::/apps/bin/user_test.elf
@@ -187,12 +187,12 @@ $(BUILD_DIR)/initrd.tar: build/user_test.elf
 	    printf '#!/system/bin\n# Keira built-in command: %s\n# Type: kernel-mode binary\n# Path: /system/bin/%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/initrd_root/system/bin/$$cmd; \
 	done
 	@echo "Keira Serial Port Driver (COM1, 115200bps, 8N1)" > $(BUILD_DIR)/initrd_root/system/drivers/serial.sys
-	@echo "Keira VGA Text Console Driver (80x25 characters, color support)" > $(BUILD_DIR)/initrd_root/system/drivers/vga.sys
+	@echo "Keira VGA Text & Widescreen Console Driver (color support)" > $(BUILD_DIR)/initrd_root/system/drivers/vga.sys
 	@echo "Keira PS/2 Keyboard Driver (US QWERTY layout)" > $(BUILD_DIR)/initrd_root/system/drivers/keyboard.sys
 	@echo "Keira PS/2 Mouse Driver (basic coordinate tracking)" > $(BUILD_DIR)/initrd_root/system/drivers/mouse.sys
 	@echo "Keira Real-Time Clock Driver (CMOS direct port communication)" > $(BUILD_DIR)/initrd_root/system/drivers/rtc.sys
 	@echo "Keira IDE Storage Controller Driver (LBA28 read/write)" > $(BUILD_DIR)/initrd_root/system/drivers/ide.sys
-	@echo "color_scheme=arch_retro\nprompt_symbol=»\ncursor=block" > $(BUILD_DIR)/initrd_root/config/theme/default.cfg
+	@echo "color_scheme=arch_retro\nprompt_symbol=>\ncursor=block" > $(BUILD_DIR)/initrd_root/config/theme/default.cfg
 	@cp build/user_test.elf $(BUILD_DIR)/initrd_root/apps/bin/user_test.elf
 	@cd $(BUILD_DIR)/initrd_root && tar -cf ../initrd.tar *
 
