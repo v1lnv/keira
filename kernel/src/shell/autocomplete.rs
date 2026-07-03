@@ -84,18 +84,34 @@ pub unsafe fn handle_autocomplete() {
         }
     } else if match_count > 1 {
         vga::print_str("\n");
+        let mut printed = 0;
         if is_command {
             for &cmd in &commands {
                 if cmd.starts_with(word) {
-                    vga::print_str(cmd);
-                    vga::print_str("  ");
+                    if printed < 10 {
+                        vga::print_str(cmd);
+                        vga::print_str("  ");
+                        printed += 1;
+                    } else {
+                        vga::print_str("... ");
+                        break;
+                    }
                 }
             }
         } else {
+            let mut exceeded = false;
             crate::fs::fat::find_matches(word, |filename| {
-                vga::print_str(filename);
-                vga::print_str("  ");
+                if printed < 10 {
+                    vga::print_str(filename);
+                    vga::print_str("  ");
+                    printed += 1;
+                } else {
+                    exceeded = true;
+                }
             });
+            if exceeded {
+                vga::print_str("... (and more)");
+            }
         }
         vga::print_str("\n");
         super::print_prompt();

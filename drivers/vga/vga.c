@@ -45,8 +45,10 @@ static uint8_t mouse_is_visible = 0;
 
 static void vga_hide_mouse_internal(void) {
     if (mouse_is_visible) {
-        uint16_t index = mouse_cursor_y * VGA_WIDTH + mouse_cursor_x;
-        VGA_BUFFER[index] = saved_mouse_entry;
+        if (mouse_cursor_x < VGA_WIDTH && mouse_cursor_y < VGA_HEIGHT) {
+            uint16_t index = mouse_cursor_y * VGA_WIDTH + mouse_cursor_x;
+            VGA_BUFFER[index] = saved_mouse_entry;
+        }
         mouse_is_visible = 0;
     }
 }

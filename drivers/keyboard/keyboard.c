@@ -49,6 +49,10 @@ void keyboard_handler(void) {
             shell_handle_keypress(0x82);
         } else if (scancode == KEY_RIGHT) {
             shell_handle_keypress(0x83);
+        } else if (scancode == KEY_F3) {
+            shell_handle_keypress(0x84);
+        } else if (scancode == KEY_F10) {
+            shell_handle_keypress(0x85);
         } else {
             /* Map scan code to ASCII using layout tables */
             if (scancode < 128) {

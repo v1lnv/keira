@@ -105,7 +105,7 @@ pub unsafe fn editor_redraw() {
 
     // 1. Draw top bar (Header)
     vga::set_color(vga::Color::White, vga::Color::DarkGrey);
-    vga::print_str("  Keira Text Editor 0.3.0  |  File: ");
+    vga::print_str("  Keira Text Editor 0.3.1  |  File: ");
     let filename_slice = &EDIT_FILENAME[..EDIT_FILENAME_LEN];
     if let Ok(name_str) = core::str::from_utf8(filename_slice) {
         vga::print_str(name_str);
@@ -464,7 +464,7 @@ pub unsafe fn editor_redraw() {
         }
     } else {
         vga::set_color(vga::Color::White, vga::Color::DarkGrey);
-        vga::print_str("  ESC: Exit  |  Ctrl+F: Search  |  Ctrl+S: Save  |  Ctrl+Q: Save & Exit");
+        vga::print_str("  ESC: Exit  |  Ctrl+F: Search  |  F3/Ctrl+S: Save  |  F10/Ctrl+Q: Save & Exit");
     }
 
     let mut current_col = vga::get_cursor_col();
@@ -599,8 +599,8 @@ pub unsafe fn editor_handle_keypress(c: u8) {
         return;
     }
 
-    // Ctrl+S (19) Quick Save shortcut
-    if c == 19 {
+    // Ctrl+S (19) or F3 (0x84) Quick Save shortcut
+    if c == 19 || c == 0x84 {
         match editor_save_file() {
             Ok(_) => {
                 let msg = b"File saved successfully!";
@@ -626,8 +626,8 @@ pub unsafe fn editor_handle_keypress(c: u8) {
         return;
     }
 
-    // Ctrl+Q (17) Save & Exit shortcut
-    if c == 17 {
+    // Ctrl+Q (17) or F10 (0x85) Save & Exit shortcut
+    if c == 17 || c == 0x85 {
         if let Err(e) = editor_save_file() {
             vga::init();
             vga::set_color(vga::Color::LightRed, vga::Color::Black);

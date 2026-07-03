@@ -4,6 +4,13 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-03
+
+### Fixed
+- F3 and F10 function key mapping in keyboard interrupt handler to enable save and exit hotkeys in visual editor.
+- Match overflows in tab autocompletion by enforcing a maximum display limit of 10 options.
+- Out-of-bounds array access guard inside fallback text-mode mouse cursor hiding routine.
+
 ## [0.3.0] - 2026-07-02
 
 ### Added
