@@ -1,6 +1,6 @@
 # Keira Kernel
 
-Keira is a freestanding, custom 64-bit operating system kernel written in a modular combination of C, Assembly (x86_64), and Rust (no_std). Designed for education and research, the kernel initializes low-level hardware segments, boots into long mode, establishes a preemptive multitasking thread scheduler, isolates Ring 3 user space programs, mounts writeable FAT16 storage partitions, and operates a terminal shell featuring a visual text editor and a dynamic VGA color theme engine.
+Keira is a freestanding, custom 64-bit operating system kernel written in a modular combination of C, Assembly (x86_64), and Rust (no_std). Designed for education and research, the kernel initializes low-level hardware segments, boots into long mode, establishes a preemptive multitasking thread scheduler, isolates Ring 3 user space programs, mounts writeable FAT16 storage partitions, and operates an interactive terminal shell featuring a visual text editor, a dynamic graphics color theme engine, a PCI bus scanner, and an AHCI (SATA) storage device driver.
 
 ---
 
@@ -24,10 +24,11 @@ The codebase is split into three layers:
 * **Privilege Separation**: Isolates user space applications in Ring 3, executing syscalls via STAR/LSTAR Model Specific Registers (MSRs).
 
 ### Storage and User Interface
-* **Storage Drivers**: Probes primary master IDE channels (LBA28) to read, write, create, and delete directories and files on writeable FAT16 volumes.
+* **PCI Bus Scanner**: Automatically probes the PCI bus configuration space on startup to detect motherboard peripherals, display controllers, and storage host controllers.
+* **Storage Drivers**: Probes primary master IDE channels (LBA28) and memory-mapped HBA SATA storage controllers (AHCI) to read, write, and manage files on writeable FAT16 volumes.
 * **Unified Boot RAM Disk**: Fallback mechanism parses preloaded in-memory USTAR tar archives (initrd.tar) to keep core utilities functional without a hard drive.
 * **Terminal Shell**: Interactive command loop, tab autocomplete, command history buffer, and a full-screen visual text editor.
-* **VGA Theme Engine**: Dynamically swaps screen styles (classic, retro, matrix, arch, and dracula) with theme-aware VGA screen clearing.
+* **VGA Theme Engine**: Dynamically swaps screen styles (classic, retro, matrix, arch, and dracula) with theme-aware graphics screen clearing.
 
 ---
 
@@ -92,6 +93,7 @@ For deep technical analysis, refer to our modular developer documentation module
 
 * **Storage and Filesystem** ([docs/storage/README.md](docs/storage/README.md))
   * [IDE Block Storage Driver](docs/storage/block.md)
+  * [PCI Bus Scanner & AHCI (SATA) Driver](docs/storage/pci_ahci.md)
   - [FAT16 Filesystem Specification](docs/storage/fat16.md)
   - [USTAR Boot RAM Disk](docs/storage/initrd.md)
 
