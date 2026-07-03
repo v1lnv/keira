@@ -1,34 +1,85 @@
 # Keira Kernel
 
-Keira is a freestanding, custom 64-bit operating system kernel written in a modular combination of C, Assembly (x86_64), and Rust (no_std).
+The Keira kernel is a freestanding, custom 64-bit operating system kernel written in a modular combination of C, Assembly (x86_64), and Rust (no_std).
 
-## Documentation
+## Quick Start
 
-The primary developer and technical documentation for Keira is located in the [docs/](docs/) directory. Please refer to the corresponding subdirectories for detailed design specifications:
+* Report a bug: See .github/SECURITY.md
+* Get the latest kernel: https://github.com/v1lnv/keira
+* Build the kernel: See docs/development/building.md
 
-* **[docs/architecture/](docs/architecture/README.md)**: Bootstrapping, long mode initialization, PML4 paging tables, interrupt handling, preemptive scheduler, and system calls.
-* **[docs/storage/](docs/storage/README.md)**: IDE block storage driver, PCI bus scanner, AHCI (SATA) disk driver, FAT16 filesystem specification, and USTAR boot RAM disk.
-* **[docs/shell/](docs/shell/README.md)**: Shell event loop, visual text editor, and theme-aware graphics console engine.
-* **[docs/development/](docs/development/README.md)**: Host toolchain setups, kernel debugging with GDB, and guide to creating custom shell commands.
+## Essential Documentation
 
-## Build and Run
+All users should be familiar with:
 
-To compile the kernel and run it under the QEMU emulator, make sure you have the required build tools (`nasm`, `gcc`, `make`, `xorriso`, `mtools`, `qemu-system-x86`) installed on your host system, then execute:
+* Building requirements: docs/development/building.md
+* Code of Conduct / Contribution: CONTRIBUTING.md
+* License: See LICENSE
 
-```bash
-# Clean, compile, and run immediately in QEMU
-make run
+Documentation can be read locally in the docs/ directory.
 
-# Clean build artifacts
-make clean
-```
 
-## Contributing and Security
+## Who Are You?
 
-Please review [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, coding style rules, and PR workflows.
+Find your role below:
 
-To report security vulnerabilities privately, please read our [Security Policy](.github/SECURITY.md).
+* New Kernel Developer - Getting started with kernel development
+* Academic Researcher - Studying kernel internals and multitasking
+* Security Expert - Ring isolation and system call security
+* System Administrator - Configuring and troubleshooting storage
+* Maintainer - Leading subsystems and code review
 
-## License
 
-Copyright (c) 2026 V1lnv. Licensed under the MIT License.
+## For Specific Users
+
+### New Kernel Developer
+
+Welcome! Start your kernel development journey here:
+
+* Getting Started: docs/development/building.md
+* Creating Custom Commands: docs/development/new_command.md
+* Coding Style: CONTRIBUTING.md
+
+### Academic Researcher
+
+Explore the kernel's architecture and internals:
+
+* Bootstrapping & 64-bit Long Mode: docs/architecture/bootstrapping.md
+* Memory Management (PMM & VMM): docs/architecture/memory.md
+* Thread Scheduler: docs/architecture/scheduler.md
+* Interrupt Handling & IDT: docs/architecture/interrupts.md
+* System Call Dispatcher: docs/architecture/syscalls.md
+
+### Security Expert
+
+Security documentation and hardening guides:
+
+* System Calls & Ring Isolation: docs/architecture/syscalls.md
+* Reporting Vulnerabilities: .github/SECURITY.md
+
+### System Administrator
+
+Configure, tune, and troubleshoot Keira systems:
+
+* IDE Block Storage: docs/storage/block.md
+* PCI Bus Scanner & AHCI (SATA) Driver: docs/storage/pci_ahci.md
+* FAT16 Filesystem: docs/storage/fat16.md
+* USTAR Boot RAM Disk (Initrd): docs/storage/initrd.md
+* Shell Event Loop and Input: docs/shell/loop.md
+* Full-Screen Text Editor: docs/shell/editor.md
+* VGA Theme Engine: docs/shell/themes.md
+
+### Maintainer
+
+Lead kernel subsystems and manage contributions:
+
+* Development & Contribution: CONTRIBUTING.md
+* Target Platform Configs: targets/
+
+
+## Communication and Support
+
+* GitHub Repository: https://github.com/v1lnv/keira
+* Issues & Bug Tracker: https://github.com/v1lnv/keira/issues
+* Developer Email: v1lnv@proton.me
+* License: Copyright (c) 2026 V1lnv. Licensed under the MIT License.
