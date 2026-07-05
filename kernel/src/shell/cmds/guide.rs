@@ -25,7 +25,7 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
                 vga::set_color(vga::Color::White, bg);
                 vga::print_str("  drives    use       disk      ramdisk   list      go\n");
                 vga::print_str("  view      create    folder    delete    edit      write\n");
-                vga::print_str("  copy      move      initrd\n\n");
+                vga::print_str("  copy      move      initrd    grep\n\n");
 
                 vga::set_color(vga::Color::LightBlue, bg);
                 vga::print_str("Task & Execution:\n");
@@ -73,6 +73,9 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
             }
             Some("view") => {
                 vga::print_str("Usage: view <filename>\nRead and display the contents of a file from the active storage drive (falls back to initrd).\n");
+            }
+            Some("grep") => {
+                vga::print_str("Usage: grep <pattern> [filename]\nSearch for lines containing <pattern> in [filename] or from the pipe input.\n");
             }
             Some("create") => {
                 vga::print_str("Usage: create <filename>\nCreate an empty file in the active directory.\n");

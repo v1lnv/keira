@@ -25,3 +25,9 @@ unsigned long sys_uptime(void) {
     __asm__ volatile("syscall" : "=a"(res) : "a"(4) : "rcx", "r11", "memory");
     return res;
 }
+
+int sys_exec(const char *filename) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(5), "D"((unsigned long)filename) : "rcx", "r11", "memory");
+    return (int)res;
+}

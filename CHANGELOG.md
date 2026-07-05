@@ -4,6 +4,14 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-05
+
+### Added
+- AHCI (SATA) DMA read/write driver supporting bare-metal transfers.
+- Shell pipelines (`|`) and input redirection (`<`) for data streaming.
+- `grep` command to search strings from files or stdin/pipe buffer.
+- `sys_exec` system call (ID 5) in kernel and user library.
+
 ## [0.4.1] - 2026-07-04
 
 ### Changed

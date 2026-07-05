@@ -124,3 +124,37 @@ pub unsafe fn unmap_page(virtual_addr: u64) -> Result<(), &'static str> {
 
     Ok(())
 }
+
+/// Translate a virtual address to its corresponding physical address
+pub unsafe fn get_phys_addr(virtual_addr: u64) -> Option<u64> {
+    let pml4_idx = ((virtual_addr >> 39) & 0x1FF) as usize;
+    let pdpt_idx = ((virtual_addr >> 30) & 0x1FF) as usize;
+    let pd_idx = ((virtual_addr >> 21) & 0x1FF) as usize;
+    let pt_idx = ((virtual_addr >> 12) & 0x1FF) as usize;
+
+    let pml4 = active_pml4() as *const u64;
+    let pdpt_entry = *pml4.add(pml4_idx);
+    if (pdpt_entry & PAGE_PRESENT) == 0 {
+        return None;
+    }
+
+    let pdpt = (pdpt_entry & !0xFFF) as *const u64;
+    let pd_entry = *pdpt.add(pdpt_idx);
+    if (pd_entry & PAGE_PRESENT) == 0 {
+        return None;
+    }
+
+    let pd = (pd_entry & !0xFFF) as *const u64;
+    let pt_entry = *pd.add(pd_idx);
+    if (pt_entry & PAGE_PRESENT) == 0 {
+        return None;
+    }
+
+    let pt = (pt_entry & !0xFFF) as *const u64;
+    let entry = *pt.add(pt_idx);
+    if (entry & PAGE_PRESENT) == 0 {
+        return None;
+    }
+
+    Some((entry & !0xFFF) | (virtual_addr & 0xFFF))
+}

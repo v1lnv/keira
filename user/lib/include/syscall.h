@@ -9,5 +9,6 @@ void sys_print_char(char c);
 void sys_exit(void) __attribute__((noreturn));
 void sys_sleep(unsigned long ms);
 unsigned long sys_uptime(void);
+int sys_exec(const char *filename);
 
 #endif // USER_SYSCALL_H

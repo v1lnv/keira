@@ -37,6 +37,37 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, _arg2: u64, _arg3: u64
         4 => {
             unsafe { get_uptime_ms() }
         }
+        // Syscall 5: Execute User Program (exec)
+        5 => {
+            let filename_ptr = arg1 as *const u8;
+            if filename_ptr.is_null() {
+                return u64::MAX;
+            }
+            
+            let mut name_buf = [0u8; 64];
+            let mut len = 0;
+            unsafe {
+                while len < 63 {
+                    let c = *filename_ptr.add(len);
+                    if c == 0 {
+                        break;
+                    }
+                    name_buf[len] = c;
+                    len += 1;
+                }
+            }
+            
+            if let Ok(filename_str) = core::str::from_utf8(&name_buf[..len]) {
+                unsafe {
+                    match crate::fs::elf::run_user_program(filename_str) {
+                        Ok(_) => 0,
+                        Err(_) => u64::MAX,
+                    }
+                }
+            } else {
+                u64::MAX
+            }
+        }
         _ => {
             u64::MAX // Unknown syscall
         }

@@ -160,16 +160,89 @@ pub fn execute_command(cmd: &str) {
         }
     }
 
-    let mut redirection_target = None;
-    let mut actual_cmd = cmd;
+    // 1. Pipeline check (has |)
+    if let Some(pipe_pos) = trimmed.find('|') {
+        let cmd1_part = trimmed[..pipe_pos].trim();
+        let cmd2_part = trimmed[pipe_pos + 1..].trim();
+        if !cmd1_part.is_empty() && !cmd2_part.is_empty() {
+            unsafe {
+                crate::io::vga::REDIRECT_TO_FILE = true;
+                crate::io::vga::REDIRECT_LEN = 0;
+                crate::io::vga::REDIRECT_BUFFER = [0; 4096];
+            }
 
-    if let Some(pos) = cmd.find('>') {
-        let cmd_part = &cmd[..pos];
-        let file_part = &cmd[pos + 1..];
+            execute_command(cmd1_part);
+
+            unsafe {
+                crate::io::vga::REDIRECT_TO_FILE = false;
+                let redirect_len = crate::io::vga::REDIRECT_LEN;
+                crate::io::vga::PIPE_BUFFER = [0; 4096];
+                let copy_len = core::cmp::min(redirect_len, 4096);
+                crate::io::vga::PIPE_BUFFER[..copy_len].copy_from_slice(&crate::io::vga::REDIRECT_BUFFER[..copy_len]);
+                crate::io::vga::PIPE_LEN = copy_len;
+                crate::io::vga::PIPE_ACTIVE = true;
+                crate::io::vga::PIPE_READ_INDEX = 0;
+            }
+
+            execute_command(cmd2_part);
+
+            unsafe {
+                crate::io::vga::PIPE_ACTIVE = false;
+                crate::io::vga::PIPE_LEN = 0;
+            }
+            return;
+        }
+    }
+
+    // 2. Input Redirection check (has <)
+    let mut actual_cmd = trimmed;
+    let mut input_file = None;
+    if let Some(pos) = actual_cmd.find('<') {
+        let cmd_part = &actual_cmd[..pos];
+        let file_part = &actual_cmd[pos + 1..];
+        let filename = file_part.trim();
+        if !filename.is_empty() {
+            input_file = Some(filename);
+            actual_cmd = cmd_part.trim();
+        }
+    }
+
+    if let Some(filename) = input_file {
+        unsafe {
+            let mut file_buf = [0u8; 4096];
+            let read_res = crate::fs::fat::read_file_content(filename, &mut file_buf);
+            let bytes_read = match read_res {
+                Ok(len) => len,
+                Err(_) => match crate::fs::tar::read_file_content(filename, &mut file_buf) {
+                    Ok(len) => len,
+                    Err(e) => {
+                        vga::set_color(vga::Color::LightRed, vga::Color::Black);
+                        vga::print_str("Error reading input redirection file: ");
+                        vga::print_str(e);
+                        vga::print_str("\n");
+                        vga::set_color(vga::Color::LightGrey, vga::Color::Black);
+                        return;
+                    }
+                }
+            };
+
+            crate::io::vga::PIPE_BUFFER = [0; 4096];
+            crate::io::vga::PIPE_BUFFER[..bytes_read].copy_from_slice(&file_buf[..bytes_read]);
+            crate::io::vga::PIPE_LEN = bytes_read;
+            crate::io::vga::PIPE_ACTIVE = true;
+            crate::io::vga::PIPE_READ_INDEX = 0;
+        }
+    }
+
+    // 3. Output Redirection check (has >)
+    let mut redirection_target = None;
+    if let Some(pos) = actual_cmd.find('>') {
+        let cmd_part = &actual_cmd[..pos];
+        let file_part = &actual_cmd[pos + 1..];
         let filename = file_part.trim();
         if !filename.is_empty() {
             redirection_target = Some(filename);
-            actual_cmd = cmd_part;
+            actual_cmd = cmd_part.trim();
         }
     }
 
@@ -179,6 +252,9 @@ pub fn execute_command(cmd: &str) {
                 vga::set_color(vga::Color::LightRed, vga::Color::Black);
                 vga::print_str("Permission denied: Non-admin users cannot write outside their home directory. Use 'please' to run as admin.\n");
                 vga::set_color(vga::Color::LightGrey, vga::Color::Black);
+                if input_file.is_some() {
+                    crate::io::vga::PIPE_ACTIVE = false;
+                }
                 return;
             }
         }
@@ -201,6 +277,9 @@ pub fn execute_command(cmd: &str) {
                     vga::print_str(e);
                     vga::print_str("\n");
                     vga::set_color(vga::Color::LightGrey, vga::Color::Black);
+                    if input_file.is_some() {
+                        crate::io::vga::PIPE_ACTIVE = false;
+                    }
                     return;
                 }
             }
@@ -218,7 +297,14 @@ pub fn execute_command(cmd: &str) {
             }
         }
     } else {
-        execute_command_inner(cmd.trim());
+        execute_command_inner(actual_cmd.trim());
+    }
+
+    if input_file.is_some() {
+        unsafe {
+            crate::io::vga::PIPE_ACTIVE = false;
+            crate::io::vga::PIPE_LEN = 0;
+        }
     }
 }
 
@@ -272,6 +358,7 @@ pub fn execute_command_inner(cmd: &str) {
         "move" => super::cmds::r#move::run(&mut parts),
         "theme" => super::cmds::theme::run(&mut parts),
         "pci" => super::cmds::pci::run(&mut parts),
+        "grep" => super::cmds::grep::run(&mut parts),
         _ => {
             // Check if the command exists on disk/initrd at /system/bin/
             let found_in_path = unsafe {

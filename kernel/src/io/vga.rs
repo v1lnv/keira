@@ -46,6 +46,12 @@ pub static mut REDIRECT_TO_FILE: bool = false;
 pub static mut REDIRECT_BUFFER: [u8; 4096] = [0; 4096];
 pub static mut REDIRECT_LEN: usize = 0;
 
+// Pipe globals
+pub static mut PIPE_BUFFER: [u8; 4096] = [0; 4096];
+pub static mut PIPE_LEN: usize = 0;
+pub static mut PIPE_ACTIVE: bool = false;
+pub static mut PIPE_READ_INDEX: usize = 0;
+
 // Framebuffer physical/logical properties
 pub static mut FRAMEBUFFER_ADDR: u64 = 0;
 pub static mut FRAMEBUFFER_PITCH: u32 = 0;

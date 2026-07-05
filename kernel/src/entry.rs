@@ -125,17 +125,32 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
 
     // Initialize FAT filesystem
     unsafe {
-        if let Ok(sectors) = crate::io::ide::identify() {
+        let mut mounted = false;
+        if crate::io::block::mount_device("ahci0").is_ok() {
+            mounted = true;
+        } else if let Ok(sectors) = crate::io::ide::identify() {
             crate::io::ide::IDE_DEVICE.size_sectors = sectors;
             let _ = crate::io::block::register_device(&*core::ptr::addr_of!(
                 crate::io::ide::IDE_DEVICE
             ));
-            let _ = crate::io::block::mount_device("ide0");
+            if crate::io::block::mount_device("ide0").is_ok() {
+                mounted = true;
+            }
         }
 
         match crate::fs::fat::init() {
             Ok(_) => {
-                crate::io::vga::print_boot_log("Probing IDE primary master storage controller", 0);
+                if mounted {
+                    if let Some(dev) = crate::io::block::get_mounted_device() {
+                        if dev.get_name() == "ahci0" {
+                            crate::io::vga::print_boot_log("Probing SATA master storage controller via AHCI", 0);
+                        } else {
+                            crate::io::vga::print_boot_log("Probing IDE primary master storage controller", 0);
+                        }
+                    }
+                } else {
+                    crate::io::vga::print_boot_log("Probing primary storage controller", 0);
+                }
                 crate::io::vga::print_boot_log("Registering active storage block device drives", 0);
                 crate::io::vga::print_boot_log(
                     "Mounting and initializing FAT16 file system driver",
@@ -186,7 +201,7 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
         crate::io::vga::Color::LightGrey,
         crate::io::vga::Color::Black,
     );
-    crate::io::vga::print_str("Keira Kernel 0.4.1-keira-1 (tty1)\n\n");
+    crate::io::vga::print_str("Keira Kernel 0.5.0-keira-1 (tty1)\n\n");
 
     // Also print a clean initialization log to Serial Console
     crate::io::serial::print_str("\x1b[1;34m::\x1b[0m Keira Kernel initialized successfully. System ready                  \x1b[1;32m[ OK ]\x1b[0m\n");
