@@ -39,18 +39,28 @@ The SATA controller's configuration registers are mapped to physical memory (BAR
 1. **Paging**: During boot, the VMM identity-maps the BAR5 physical address range (`PAGE_WRITABLE`) so the kernel can access HBA registers.
 2. **GHC (Global Host Control)**:
    - Sets the `AE` (AHCI Enable) bit `31`.
-   - Triggers HBA Reset by setting `HR` bit `0` and waiting for it to clear.
+   - Triggers HBA Reset by setting `HR` bit `0` and waiting for it to clear with a bare-metal microsecond busy loop delay (`io_delay`).
 
-### Port Probing and Signatures
+### Port Probing, Initialization & Signatures
 The driver reads the `PI` (Ports Implemented) register to check which of the 32 HBA ports are active:
-- Each port registers start at offset `0x100 + (port * 0x80)`.
-- Checks `PxSSTS` (SATA Status) to confirm device presence (`DET == 3` and `IPM == 1`).
-- Reads `PxSIG` (Signature) to identify the SATA device type:
+- Each port's registers start at offset `0x100 + (port * 0x80)`.
+- Polls `PxSSTS` (SATA Status) to wait for link establishment (`DET == 3` and `IPM == 1`).
+- Allocates physical frames for the Command List Base (`PxCLB`), Received FIS Base (`PxFB`), and Command Table Base (`PxCTB`).
+- Identity-maps these tables and registers their physical addresses with the controller.
+- Starts the command engine (`ST`) and FIS receive (`FRE`) bits.
+- Reads `PxSIG` (Signature) to identify the device type:
   - **`0x00000101`**: SATA Hard Disk (ATA)
   - **`0xEB140101`**: CD-ROM Drive (ATAPI)
 
+### DMA Sector Transfers
+For reading and writing sectors, the driver constructs DMA command packets:
+1. **Command Header**: Sets PRDT length to `1` and points command table address to `PxCTB`.
+2. **CFIS**: Populates Host-to-Device Register FIS (type `0x27`) with Command byte `0x25` (READ DMA EXT) or `0x35` (WRITE DMA EXT) and targets the sector index (LBA48).
+3. **PRDT (Physical Region Descriptor Table)**: Configures the buffer address pointing to a page-aligned physical sector buffer (`SECTOR_BUF_PHYS`) and size `511` (512 bytes).
+4. **Command Issue**: Triggers bit `0` in `PxCI` (Command Issue) and polls for completion, checking Task File Data (`PxTFD`) for error status.
+
 ### BlockDevice Registration
-Upon finding a SATA Disk, the driver instantiates an `AhciBlockDevice` struct and registers it as `ahci0` with the block device registry (`BlockDevice` trait).
+Upon finding a SATA Disk, the driver instantiates an `AhciBlockDevice` struct and registers it as `ahci0` with the block device registry (`BlockDevice` trait), mapping virtual buffer reads/writes through the page-aligned DMA sector buffer.
 
 ---
 

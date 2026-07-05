@@ -33,6 +33,20 @@ When a Ring 3 application executes the `syscall` instruction:
 2. The CPU switches to Ring 0 code segment, clears flags defined in SFMASK, and jumps to `syscall_entry`.
 3. `syscall_entry` saves the user RSP and switches to the thread's Ring 0 stack.
 4. Preserves caller registers by pushing them onto the stack.
-5. Invokes the central Rust router `syscall_handler` with the syscall number in `RAX` and arguments in `RDI`, `RSI`, `RDX`, `R10`, `R8`, `R9`.
+5. Invokes the central Rust router `syscall_dispatcher` with the syscall number in `RAX` and arguments in `RDI`, `RSI`, `RDX`.
 6. Upon completion, the return value is loaded into `RAX`.
 7. User registers are restored, the stack pointer is swapped back, and the `sysretq` instruction is called to return to Ring 3.
+
+---
+
+## 4. Supported System Calls List
+
+The kernel exposes the following system calls to Ring 3 applications:
+
+| ID | Name | Signature | Description |
+|---|---|---|---|
+| **1** | `sys_print_char` | `void sys_print_char(char c)` | Prints a single character to the screen buffer. |
+| **2** | `sys_exit` | `void sys_exit(void)` | Exits the user program context and jumps back to Ring 0 kernel shell. |
+| **3** | `sys_sleep` | `void sys_sleep(unsigned long ms)` | Pauses user thread execution for a duration in milliseconds. |
+| **4** | `sys_uptime` | `unsigned long sys_uptime(void)` | Returns system uptime since boot in milliseconds. |
+| **5** | `sys_exec` | `int sys_exec(const char *filename)` | Loads a dynamic ELF executable from disk and executes it. |

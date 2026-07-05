@@ -34,3 +34,14 @@ The autocomplete engine is triggered when the Tab key is pressed:
    - It appends the missing suffix to the input buffer and prints it to the VGA screen, updating the cursor column instantly.
 4. If multiple matches are found:
    - It lists the matching file options below the prompt for the user to select.
+
+---
+
+## 4. Shell Redirection and Command Pipelines
+
+Keira shell supports standard I/O redirection and pipelines (`|`, `>`, `<`) parsed sequentially inside the executor:
+
+- **Output Redirection (`>`)**: Intercepts console print strings by toggling `REDIRECT_TO_FILE` and copying characters to a `REDIRECT_BUFFER`. Once the command completes, it writes this buffer to the target file.
+- **Input Redirection (`<`)**: Reads a file's content from storage into a global `PIPE_BUFFER` and activates `PIPE_ACTIVE`. Future shell/command read operations fetch characters directly from the buffer instead of blocking on keyboard interrupts.
+- **Command Pipelines (`|`)**: Combines both redirection mechanisms. If `cmd1 | cmd2` is executed, the shell runs `cmd1` with output redirection active, copies `REDIRECT_BUFFER` directly to `PIPE_BUFFER`, toggles `PIPE_ACTIVE = true`, and executes `cmd2` utilizing the piped buffer as its standard input stream.
+- **`grep` Command**: A text-filtering utility that searches for pattern matches per-line. It reads from a specified file or automatically reads from `PIPE_BUFFER` if pipeline input redirection is active.
