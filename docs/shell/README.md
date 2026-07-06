@@ -10,3 +10,5 @@ This directory documents the interactive text user interfaces (TUI), prompt rend
   2D text grids, scrolling, editing controls, status buffers, and keyboard hotkeys.
 - **[Console Theme Engine](themes.md)**
   Dynamic visual shell styling and theme-aware terminal screen clearing.
+- **[PC Speaker Sound Driver & Melodies](sound.md)**
+  Audio hardware output, frequency tone control, and melody playback.

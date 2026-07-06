@@ -68,6 +68,7 @@ Configure, tune, and troubleshoot Keira systems:
 * Shell Event Loop and Input: docs/shell/loop.md
 * Full-Screen Text Editor: docs/shell/editor.md
 * VGA Theme Engine: docs/shell/themes.md
+* PC Speaker Sound Driver: docs/shell/sound.md
 
 ### Maintainer
 
