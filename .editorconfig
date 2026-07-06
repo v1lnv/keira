@@ -20,14 +20,19 @@ indent_size = 8
 tab_width = 8
 
 # Source Code Files (C, C++ Headers, Rust, Assembly, Linker Scripts, Constants)
-[*.{c,h,rs,asm,inc,ld}]
+[*.{c,h,rs,asm,s,S,inc,ld}]
 indent_style = space
 indent_size = 4
 
 # Serialization & Markup Configurations (JSON, TOML)
 [*.{json,toml}]
 indent_style = space
-indent_size = 4
+indent_size = 2
+
+# YAML Configuration Files
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
 
 # Markdown Files (Preserve trailing spaces for line breaks)
 [*.md]
