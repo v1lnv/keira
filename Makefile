@@ -135,7 +135,7 @@ ALL_OBJS      := $(ASM_OBJS) $(C_OBJS)
 all: $(KERNEL_ISO) $(DISK_IMG) ## Build everything (Kernel binary, RAM Disk, Hard Disk, and Bootable ISO)
 
 help: ## Show this interactive help screen containing all available targets
-	@printf "$(CLR_BOLD)Keira OS Build System (v0.5.0)$(CLR_RESET)\n"
+	@printf "$(CLR_BOLD)Keira OS Build System (v0.6.0)$(CLR_RESET)\n"
 	@printf "Usage: make <target> [COLOR=0]\n\n"
 	@printf "$(CLR_BOLD)Available Targets:$(CLR_RESET)\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'

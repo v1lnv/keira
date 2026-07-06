@@ -27,3 +27,6 @@ pub mod ramdisk;
 
 /// AHCI SATA Driver
 pub mod ahci;
+
+/// PC Speaker Sound Driver
+pub mod sound;

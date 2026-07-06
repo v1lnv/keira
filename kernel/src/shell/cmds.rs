@@ -38,3 +38,4 @@ pub mod wipe;
 pub mod write;
 pub mod pci;
 pub mod grep;
+pub mod play;

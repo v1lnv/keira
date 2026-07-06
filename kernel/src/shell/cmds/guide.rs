@@ -40,8 +40,8 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
                 vga::set_color(vga::Color::LightBlue, bg);
                 vga::print_str("Utilities:\n");
                 vga::set_color(vga::Color::White, bg);
-                vga::print_str("  guide     help      history   theme     say       wipe\n");
-                vga::print_str("  reset\n");
+                vga::print_str("  guide     help      history   theme     say       play\n");
+                vga::print_str("  wipe      reset\n");
                 vga::set_color(CURRENT_THEME.text_fg, bg);
             }
             Some("system") => {
@@ -109,6 +109,9 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
             }
             Some("say") => {
                 vga::print_str("Usage: say <message>\nEcho back the arguments typed by the user to the screen.\n");
+            }
+            Some("play") => {
+                vga::print_str("Usage: play <mario|nokia|starwars|beep>\nPlay retro tunes or a simple beep on the PC speaker.\n");
             }
             Some("wipe") => {
                 vga::print_str("Usage: wipe\nClear the VGA screen and reset the cursor to the top-left position.\n");
