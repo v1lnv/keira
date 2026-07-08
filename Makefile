@@ -115,6 +115,7 @@ ASM_SRCS      := arch/x86/boot/multiboot2_header.asm \
 
 C_SRCS        := drivers/serial/serial.c \
 	         drivers/vga/vga.c \
+	         drivers/sound/sound.c \
 	         arch/x86/kernel/idt.c \
 	         arch/x86/kernel/pic.c \
 	         arch/x86/kernel/pit.c \
@@ -135,7 +136,7 @@ ALL_OBJS      := $(ASM_OBJS) $(C_OBJS)
 all: $(KERNEL_ISO) $(DISK_IMG) ## Build everything (Kernel binary, RAM Disk, Hard Disk, and Bootable ISO)
 
 help: ## Show this interactive help screen containing all available targets
-	@printf "$(CLR_BOLD)Keira OS Build System (v0.6.0)$(CLR_RESET)\n"
+	@printf "$(CLR_BOLD)Keira OS Build System (v0.6.1)$(CLR_RESET)\n"
 	@printf "Usage: make <target> [COLOR=0]\n\n"
 	@printf "$(CLR_BOLD)Available Targets:$(CLR_RESET)\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -163,7 +164,7 @@ $(DISK_IMG): build/user_test.elf
 	@for cmd in guide login drives use ramdisk system cpu runtime time memory \
 	            devices wait initrd wipe reset run write tasks demo disk list \
 	            go script view create folder delete edit say copy help history \
-	            move theme please; do \
+	            move theme please pci grep play; do \
 	    printf '#!/system/bin\n# Keira built-in command: %%s\n# Type: kernel-mode binary\n# Path: /system/bin/%%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/system_bin/$$cmd; \
 	    mcopy -o -i $(DISK_IMG) $(BUILD_DIR)/system_bin/$$cmd ::/system/bin/$$cmd; \
 	done
@@ -175,7 +176,9 @@ $(DISK_IMG): build/user_test.elf
 	@echo "Keira PS/2 Mouse Driver (basic coordinate tracking)" > $(BUILD_DIR)/drivers/mouse.sys
 	@echo "Keira Real-Time Clock Driver (CMOS direct port communication)" > $(BUILD_DIR)/drivers/rtc.sys
 	@echo "Keira IDE Storage Controller Driver (LBA28 read/write)" > $(BUILD_DIR)/drivers/ide.sys
-	@for driver in serial.sys vga.sys keyboard.sys mouse.sys rtc.sys ide.sys; do \
+	@echo "Keira AHCI SATA Storage Controller Driver (DMA read/write)" > $(BUILD_DIR)/drivers/ahci.sys
+	@echo "Keira PC Speaker Sound Subsystem Driver (PIT Channel 2)" > $(BUILD_DIR)/drivers/sound.sys
+	@for driver in serial.sys vga.sys keyboard.sys mouse.sys rtc.sys ide.sys ahci.sys sound.sys; do \
 	    mcopy -o -i $(DISK_IMG) $(BUILD_DIR)/drivers/$$driver ::/system/drivers/$$driver; \
 	done
 	@echo "color_scheme=classic\nprompt_symbol=>\ncursor=block" > $(BUILD_DIR)/default.cfg
@@ -200,7 +203,7 @@ $(BUILD_DIR)/initrd.tar: build/user_test.elf
 	@for cmd in guide login drives use ramdisk system cpu runtime time memory \
 	            devices wait initrd wipe reset run write tasks demo disk list \
 	            go script view create folder delete edit say copy help history \
-	            move theme please; do \
+	            move theme please pci grep play; do \
 	    printf '#!/system/bin\n# Keira built-in command: %%s\n# Type: kernel-mode binary\n# Path: /system/bin/%%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/initrd_root/system/bin/$$cmd; \
 	done
 	@echo "Keira Serial Port Driver (COM1, 115200bps, 8N1)" > $(BUILD_DIR)/initrd_root/system/drivers/serial.sys
@@ -209,6 +212,8 @@ $(BUILD_DIR)/initrd.tar: build/user_test.elf
 	@echo "Keira PS/2 Mouse Driver (basic coordinate tracking)" > $(BUILD_DIR)/initrd_root/system/drivers/mouse.sys
 	@echo "Keira Real-Time Clock Driver (CMOS direct port communication)" > $(BUILD_DIR)/initrd_root/system/drivers/rtc.sys
 	@echo "Keira IDE Storage Controller Driver (LBA28 read/write)" > $(BUILD_DIR)/initrd_root/system/drivers/ide.sys
+	@echo "Keira AHCI SATA Storage Controller Driver (DMA read/write)" > $(BUILD_DIR)/initrd_root/system/drivers/ahci.sys
+	@echo "Keira PC Speaker Sound Subsystem Driver (PIT Channel 2)" > $(BUILD_DIR)/initrd_root/system/drivers/sound.sys
 	@echo "color_scheme=classic\nprompt_symbol=>\ncursor=block" > $(BUILD_DIR)/initrd_root/config/theme/default.cfg
 	@cp build/user_test.elf $(BUILD_DIR)/initrd_root/apps/bin/user_test.elf
 	@cd $(BUILD_DIR)/initrd_root && tar -cf ../initrd.tar *

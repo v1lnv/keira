@@ -4,6 +4,17 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-07-08
+
+### Changed
+- Refactored PC Speaker driver into modular C implementation (`drivers/sound/`).
+- Rust `sound.rs` now calls into C via FFI instead of using inline assembly.
+
+### Added
+- C driver: `sound.c`, `include/sound.h`, and `regs.h` with hardware register definitions.
+- Registered `ahci.sys` and `sound.sys` driver placeholders in disk and initrd targets.
+- Registered `pci`, `grep`, and `play` command binaries in disk and initrd targets.
+
 ## [0.6.0] - 2026-07-06
 
 ### Added

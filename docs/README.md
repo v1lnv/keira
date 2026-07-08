@@ -31,7 +31,10 @@ Design of interactive terminal user interfaces, autocomplete engines, visual edi
 * [Shell Event Loop & Input](shell/loop.md)
 * [Full-Screen Text Editor](shell/editor.md)
 * [Console Theme Engine](shell/themes.md)
-* [PC Speaker Sound Driver](shell/sound.md)
+
+### Hardware Drivers
+Low-level hardware driver implementations following the C↔Rust modular architecture.
+* [PC Speaker Sound Driver](shell/sound.md) — PIT Channel 2 tone generation via C driver + Rust FFI wrapper.
 
 ### Development & Integration Guide
 Practical guides for setting up environments, compiling, testing, source-level debugging, and extending the shell.

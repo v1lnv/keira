@@ -4,7 +4,40 @@ This module documents the low-level hardware control of the PC Speaker (via PIT 
 
 ---
 
-## 1. Programmable Interval Timer (PIT) Channel 2
+## 1. Architecture Overview
+
+The sound subsystem follows Keira's C↔Rust modular driver model:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Shell `play` command (Rust)                                     │
+│  kernel/src/shell/cmds/play.rs                                   │
+├──────────────────────────────────────────────────────────────────┤
+│  Safe Rust FFI Wrapper                                           │
+│  kernel/src/io/sound.rs                                          │
+│  play_sound() → sound_play()    stop_sound() → sound_stop()     │
+├──────────────────────────────────────────────────────────────────┤
+│  C Hardware Driver                                               │
+│  drivers/sound/sound.c                                           │
+│  Handles PIT programming and speaker gate control via outb/inb  │
+├──────────────────────────────────────────────────────────────────┤
+│  Register Definitions        │  Shared I/O Abstraction          │
+│  drivers/sound/regs.h        │  arch/x86/include/asm/io.h      │
+└──────────────────────────────┴──────────────────────────────────┘
+```
+
+### File Layout
+
+| File | Purpose |
+|------|---------|
+| `drivers/sound/sound.c` | C implementation: PIT Channel 2 and speaker gate I/O |
+| `drivers/sound/include/sound.h` | Public C header (API for FFI) |
+| `drivers/sound/regs.h` | Hardware register addresses and bitmasks |
+| `kernel/src/io/sound.rs` | Safe Rust wrapper calling C functions via `extern "C"` |
+
+---
+
+## 2. Programmable Interval Timer (PIT) Channel 2
 
 The PC Speaker in standard IBM PC compatible hardware is connected to Channel 2 of the PIT:
 - **PIT Frequency**: The hardware oscillator runs at a base frequency of **1,193,182 Hz**.
@@ -18,23 +51,23 @@ The PC Speaker in standard IBM PC compatible hardware is connected to Channel 2 
 
 ---
 
-## 2. Audio Control Implementation
+## 3. Audio Control Implementation
 
-### Starting Sound (`play_sound`)
+### Starting Sound (`sound_play` in C / `play_sound` in Rust)
 To output a frequency on the speaker, the driver:
-1. Calculates the divisor: `div = 1193182 / frequency`.
-2. Writes `0xB6` to the Mode/Command register (`0x43`) to set PIT Channel 2 to mode 3 (square wave generator).
-3. Writes the low byte of the divisor followed by the high byte to data register `0x42`.
-4. Reads the System Control Port B (`0x61`), sets bits `0` and `1` to high, and writes it back to enable the speaker gate and connect it.
+1. Calculates the divisor: `div = PIT_BASE_FREQ / frequency`.
+2. Writes `PIT_CH2_MODE3` (`0xB6`) to the Mode/Command register to set PIT Channel 2 to mode 3 (square wave generator).
+3. Writes the low byte of the divisor followed by the high byte to data register `PIT_CH2_DATA`.
+4. Reads the System Control Port B (`SYS_CTRL_B`), sets `SPKR_ENABLE` bits, and writes it back.
 
-### Stopping Sound (`stop_sound`)
-To stop sound output, the driver reads Port `0x61`, clears the lower 2 bits (bits `0` and `1`), and writes it back:
-```rust
-let tmp = inb(0x61) & 0xFC;
-outb(0x61, tmp);
+### Stopping Sound (`sound_stop` in C / `stop_sound` in Rust)
+To stop sound output, the driver reads Port `SYS_CTRL_B`, masks with `SPKR_DISABLE` to clear the lower 2 bits, and writes it back:
+```c
+uint8_t ctrl = inb(SYS_CTRL_B);
+outb(SYS_CTRL_B, ctrl & SPKR_DISABLE);
 ```
 
-### Delay & Notes (`play_note`)
+### Delay & Notes (`play_note` in Rust)
 To play distinct notes:
 1. Trigger sound at the note's target frequency.
 2. Sleep for the duration of the note (in milliseconds) using CPU `hlt` instructions.
@@ -43,7 +76,7 @@ To play distinct notes:
 
 ---
 
-## 3. Shell `play` Command
+## 4. Shell `play` Command
 
 The `play` command processes arguments to select one of the built-in retro melodies:
 

@@ -1,6 +1,6 @@
 # Keira Kernel
 
-The Keira kernel is a freestanding, custom 64-bit operating system kernel written in a modular combination of C, Assembly (x86_64), and Rust (no_std).
+The Keira kernel is a freestanding, custom 64-bit operating system kernel written in a modular combination of C, Assembly (x86_64), and Rust (no_std). Hardware drivers are implemented in C and exposed to Rust via FFI for a clean separation between low-level I/O and high-level logic.
 
 ## Quick Start
 
@@ -68,7 +68,7 @@ Configure, tune, and troubleshoot Keira systems:
 * Shell Event Loop and Input: docs/shell/loop.md
 * Full-Screen Text Editor: docs/shell/editor.md
 * VGA Theme Engine: docs/shell/themes.md
-* PC Speaker Sound Driver: docs/shell/sound.md
+* PC Speaker Sound Driver (C + Rust FFI): docs/shell/sound.md
 
 ### Maintainer
 

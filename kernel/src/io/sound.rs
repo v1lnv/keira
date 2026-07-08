@@ -1,68 +1,67 @@
 #![allow(dead_code)]
-//! Keira Kernel: PC Speaker Sound Driver
+//! Keira Kernel: PC Speaker Sound Driver (Rust FFI Wrapper)
 //!
-//! Provides a safe Rust interface to play frequencies on the PC Speaker (PIT Channel 2).
+//! Safe Rust interface to the C PC Speaker driver (`drivers/sound/`).
+//!
+//! These functions call into C via FFI. The C driver handles the actual
+//! hardware interaction (PIT Channel 2 programming and speaker gate control
+//! via `outb`/`inb` instructions on ports 0x42, 0x43, and 0x61).
+//!
+//! Why wrap C functions instead of reimplementing in Rust?
+//!   - Keeps hardware I/O port access centralized in the C driver layer.
+//!   - Avoids duplicating inline assembly for `outb`/`inb`.
+//!   - Demonstrates the C↔Rust interop that is central to Keira's design.
 
 use core::arch::asm;
 
+// FFI Declarations : C functions from `drivers/sound/sound.c`
 extern "C" {
+    /// Play a tone at the specified frequency on the PC Speaker.
+    fn sound_play(freq: u32);
+
+    /// Stop all sound output on the PC Speaker.
+    fn sound_stop();
+
+    /// Get the system uptime in milliseconds (from PIT tick counter).
     fn get_uptime_ms() -> u64;
 }
 
-unsafe fn outb(port: u16, val: u8) {
-    asm!(
-        "out dx, al",
-        in("dx") port,
-        in("al") val,
-        options(nomem, nostack, preserves_flags)
-    );
-}
+// Safe Public API
 
-unsafe fn inb(port: u16) -> u8 {
-    let val: u8;
-    asm!(
-        "in al, dx",
-        out("al") val,
-        in("dx") port,
-        options(nomem, nostack, preserves_flags)
-    );
-    val
-}
-
-/// Plays a beep at the specified frequency (in Hz).
+/// Play a tone at the specified frequency (in Hz) on the PC Speaker.
+///
+/// Configures PIT Channel 2 as a square wave generator and enables the
+/// speaker gate via System Control Port B.
+///
+/// # Arguments
+/// * `freq` : The target frequency in Hz. A value of 0 is silently ignored.
 pub fn play_sound(freq: u32) {
-    if freq == 0 {
-        return;
-    }
-    
-    // PIT frequency is 1.193182 MHz
-    let div = 1193182 / freq;
-    
+    // SAFETY: `sound_play` is a simple I/O operation with no memory
+    // side effects beyond writing to PIT and speaker gate registers.
     unsafe {
-        // Set Channel 2 to mode 3 (square wave generator)
-        outb(0x43, 0xB6);
-        // Set divisor low byte
-        outb(0x42, (div & 0xFF) as u8);
-        // Set divisor high byte
-        outb(0x42, ((div >> 8) & 0xFF) as u8);
-        
-        // Turn speaker on
-        let tmp = inb(0x61);
-        if (tmp & 3) != 3 {
-            outb(0x61, tmp | 3);
-        }
+        sound_play(freq);
     }
 }
 
-/// Stops playing sound on the PC speaker.
+/// Stop all sound output on the PC Speaker.
+///
+/// Clears the speaker gate and PIT Channel 2 gate bits in
+/// System Control Port B (0x61).
 pub fn stop_sound() {
+    // SAFETY: `sound_stop` is a simple I/O operation that clears
+    // speaker gate bits with no memory side effects.
     unsafe {
-        let tmp = inb(0x61) & 0xFC;
-        outb(0x61, tmp);
+        sound_stop();
     }
 }
 
-/// Busy wait sleep helper using CPU hlt instructions.
+/// Busy-wait sleep helper using CPU `hlt` instructions.
+///
+/// Suspends execution for the specified duration by polling the kernel
+/// uptime counter and halting the CPU between checks.
+///
+/// # Arguments
+/// * `ms` : The number of milliseconds to sleep.
 pub fn sleep_ms(ms: u64) {
     let start = unsafe { get_uptime_ms() };
     while unsafe { get_uptime_ms() } < start + ms {
@@ -72,7 +71,15 @@ pub fn sleep_ms(ms: u64) {
     }
 }
 
-/// Plays a note (freq) for duration (ms) followed by a short silence gap.
+/// Play a musical note for a specified duration followed by a short gap.
+///
+/// If the frequency is 0, the function produces silence (rest) for the
+/// given duration. A 10ms gap is inserted after each note to distinguish
+/// consecutive identical pitches.
+///
+/// # Arguments
+/// * `freq`        : The note frequency in Hz (0 for silence/rest).
+/// * `duration_ms` : The duration of the note in milliseconds.
 pub fn play_note(freq: u32, duration_ms: u64) {
     if freq == 0 {
         stop_sound();
@@ -82,6 +89,6 @@ pub fn play_note(freq: u32, duration_ms: u64) {
         sleep_ms(duration_ms);
         stop_sound();
     }
-    // 10ms gap between notes
+    // 10ms gap between notes for articulation
     sleep_ms(10);
 }
