@@ -90,3 +90,75 @@ Usage:
 play mario
 play starwars
 ```
+
+---
+
+## 5. Intel High Definition Audio (HDA) Subsystem
+
+Keira v0.7.0 adds support for the Intel High Definition Audio (HDA) standard. HDA allows playing actual digital audio (PCM samples) rather than simple frequency beeps.
+
+### Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Shell `hda` command (Rust)                                      │
+│  kernel/src/shell/cmds/hda.rs                                    │
+├──────────────────────────────────────────────────────────────────┤
+│  Safe Rust FFI Wrapper & DMA Manager                             │
+│  kernel/src/io/hda.rs                                            │
+│  Allocates BDL page and DMA buffers, maps MMIO BAR0              │
+├──────────────────────────────────────────────────────────────────┤
+│  C Hardware Driver                                               │
+│  drivers/sound/hda.c                                             │
+│  Resets HDA, routes codec widgets, and runs the stream DMA engine│
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### File Layout
+
+| File | Purpose |
+|------|---------|
+| `drivers/sound/hda.c` | C implementation: HDA stream DMA and immediate command codec configuration |
+| `drivers/sound/include/hda.h` | Public C header (API for FFI) |
+| `kernel/src/io/hda.rs` | Rust PCI device scanner, memory mapper, and DMA allocator |
+| `kernel/src/shell/cmds/hda.rs` | Shell command implementation for `hda` |
+
+### Initialization Sequence
+
+1. **PCI Discovery**: The Rust scanner matches the HDA device (Class `0x04`, Subclass `0x03`).
+2. **PCI Configuration**: Enables PCI Bus Mastering and Memory Space mapping by writing to the PCI Command Register.
+3. **Register Mapping**: Maps the HDA controller MMIO BAR0 (up to 16KB physical space) to virtual pages.
+4. **DMA Allocation**: Allocates three physical page frames:
+   - One frame for the Buffer Descriptor List (BDL).
+   - Two frames for double-buffered stereo samples (Buffer 1 & Buffer 2).
+5. **Controller Reset**: Resets the HDA controller via the Global Control Register (GCTL, offset `0x08`).
+6. **Codec Configuration**: Uses the Immediate Command interface (offset `0x60`-`0x68`) to:
+   - Enable output pin widget (Node `0x03`).
+   - Route Audio Output DAC (Node `0x02`) to Node `0x03`.
+   - Unmute and set maximum volume on both DAC and Pin widgets.
+
+### DMA Stream Playback
+
+When starting playback (e.g., `hda play 440`):
+1. **Sample Generation**: The driver fills the two 4KB page buffers with a 16-bit stereo square-wave signal corresponding to the target frequency (using a 48,000 Hz sample rate).
+2. **BDL Setup**: Populates two BDL entries, one for each page buffer, setting the `IOC` (Interrupt on Completion) flag.
+3. **Stream Configuration**: Configures Output Stream 0 (stream 4, offset `0x100`):
+   - Sets the stream BDL physical address.
+   - Sets total length to 8192 bytes.
+   - Sets the last valid descriptor index (LVI) to 1.
+   - Sets the format to 48kHz, 16-bit, stereo.
+   - Assigns Stream ID 1.
+4. **Trigger Playback**: Activates the stream by setting the RUN bit in the stream control register. The HDA controller automatically cycles through the buffers in a hardware-controlled loop.
+
+### Shell `hda` Command
+
+Usage:
+- **`hda status`**: Check if HDA was found and initialized.
+- **`hda play <freq>`**: Play a continuous wave tone at `<freq>` Hz (default 440 Hz).
+- **`hda stop`**: Stop the active audio stream.
+
+```bash
+hda status
+hda play 880
+hda stop
+```
