@@ -30,3 +30,6 @@ pub mod ahci;
 
 /// PC Speaker Sound Driver
 pub mod sound;
+
+/// Intel HD Audio Driver
+pub mod hda;

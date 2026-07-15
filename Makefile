@@ -67,6 +67,7 @@ QEMU_FLAGS    := -cdrom $(KERNEL_ISO) \
 	         -device ahci,id=ahci0 \
 	         -drive file=$(DISK_IMG),format=raw,id=sata0,if=none \
 	         -device ide-hd,drive=sata0,bus=ahci0.0 \
+	         -device intel-hda -device hda-duplex \
 	         -boot d \
 	         -serial stdio \
 	         -no-shutdown \
@@ -116,6 +117,7 @@ ASM_SRCS      := arch/x86/boot/multiboot2_header.asm \
 C_SRCS        := drivers/serial/serial.c \
 	         drivers/vga/vga.c \
 	         drivers/sound/sound.c \
+	         drivers/sound/hda.c \
 	         arch/x86/kernel/idt.c \
 	         arch/x86/kernel/pic.c \
 	         arch/x86/kernel/pit.c \
@@ -136,7 +138,7 @@ ALL_OBJS      := $(ASM_OBJS) $(C_OBJS)
 all: $(KERNEL_ISO) $(DISK_IMG) ## Build everything (Kernel binary, RAM Disk, Hard Disk, and Bootable ISO)
 
 help: ## Show this interactive help screen containing all available targets
-	@printf "$(CLR_BOLD)Keira OS Build System (v0.6.2)$(CLR_RESET)\n"
+	@printf "$(CLR_BOLD)Keira OS Build System (v0.7.0)$(CLR_RESET)\n"
 	@printf "Usage: make <target> [COLOR=0]\n\n"
 	@printf "$(CLR_BOLD)Available Targets:$(CLR_RESET)\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -164,7 +166,7 @@ $(DISK_IMG): build/user_test.elf
 	@for cmd in guide login drives use ramdisk system cpu runtime time memory \
 	            devices wait initrd wipe reset run write tasks demo disk list \
 	            go script view create folder delete edit say copy help history \
-	            move theme please pci grep play; do \
+	            move theme please pci grep play hda; do \
 	    printf '#!/system/bin\n# Keira built-in command: %s\n# Type: kernel-mode binary\n# Path: /system/bin/%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/system_bin/$$cmd; \
 	    mcopy -o -i $(DISK_IMG) $(BUILD_DIR)/system_bin/$$cmd ::/system/bin/$$cmd; \
 	done
@@ -203,7 +205,7 @@ $(BUILD_DIR)/initrd.tar: build/user_test.elf
 	@for cmd in guide login drives use ramdisk system cpu runtime time memory \
 	            devices wait initrd wipe reset run write tasks demo disk list \
 	            go script view create folder delete edit say copy help history \
-	            move theme please pci grep play; do \
+	            move theme please pci grep play hda; do \
 	    printf '#!/system/bin\n# Keira built-in command: %s\n# Type: kernel-mode binary\n# Path: /system/bin/%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/initrd_root/system/bin/$$cmd; \
 	done
 	@echo "Keira Serial Port Driver (COM1, 115200bps, 8N1)" > $(BUILD_DIR)/initrd_root/system/drivers/serial.sys

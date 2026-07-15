@@ -56,7 +56,7 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
         vga::print_str("  ");
         vga::print_str("System: ");
         vga::set_color(vga::Color::White, vga::Color::Black);
-        vga::print_str("Keira Kernel v0.6.2\n");
+        vga::print_str("Keira Kernel v0.7.0\n");
 
         vga::set_color(vga::Color::LightBlue, vga::Color::Black);
         vga::print_str(logo[3]);

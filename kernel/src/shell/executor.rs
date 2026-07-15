@@ -354,6 +354,7 @@ pub fn execute_command_inner(cmd: &str) {
         "pci" => super::cmds::pci::run(&mut parts),
         "grep" => super::cmds::grep::run(&mut parts),
         "play" => super::cmds::play::run(&mut parts),
+        "hda" => super::cmds::hda::run(&mut parts),
         _ => {
             // Check if the command exists on disk/initrd at /system/bin/
             let found_in_path = unsafe {

@@ -122,6 +122,7 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
     // Initialize PCI and AHCI
     crate::io::pci::init();
     let _ = crate::io::ahci::init();
+    let _ = unsafe { crate::io::hda::init() };
 
     // Initialize FAT filesystem
     unsafe {
@@ -201,7 +202,7 @@ pub extern "C" fn kernel_main(multiboot_info_ptr: u64) -> ! {
         crate::io::vga::Color::LightGrey,
         crate::io::vga::Color::Black,
     );
-    crate::io::vga::print_str("Keira Kernel 0.6.2-keira-1 (tty1)\n\n");
+    crate::io::vga::print_str("Keira Kernel 0.7.0-keira-1 (tty1)\n\n");
 
     // Also print a clean initialization log to Serial Console
     crate::io::serial::print_str("\x1b[1;34m::\x1b[0m Keira Kernel initialized successfully. System ready                  \x1b[1;32m[ OK ]\x1b[0m\n");

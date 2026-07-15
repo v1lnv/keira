@@ -40,7 +40,7 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
                 vga::set_color(vga::Color::LightBlue, bg);
                 vga::print_str("Utilities:\n");
                 vga::set_color(vga::Color::White, bg);
-                vga::print_str("  guide     help      history   theme     say       play\n");
+                vga::print_str("  guide     help      history   theme     say       play      hda\n");
                 vga::print_str("  wipe      reset\n");
                 vga::set_color(CURRENT_THEME.text_fg, bg);
             }
@@ -154,6 +154,9 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
             }
             Some("theme") => {
                 vga::print_str("Usage: theme [retro|matrix|arch|classic|dracula]\nChange the active shell background, foreground, and accent colors dynamically.\n");
+            }
+            Some("hda") => {
+                vga::print_str("Usage: hda <play [freq]|stop|status>\nPlay sound waveforms using the Intel High Definition Audio (HDA) controller.\n");
             }
             Some(other) => {
                 vga::set_color(vga::Color::LightRed, bg);

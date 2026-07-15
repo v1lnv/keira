@@ -55,6 +55,18 @@ pub unsafe fn pci_read_config_u32(bus: u8, slot: u8, func: u8, offset: u8) -> u3
     inl(PCI_CONFIG_DATA)
 }
 
+/// Write 32-bit register to PCI configuration space
+pub unsafe fn pci_write_config_u32(bus: u8, slot: u8, func: u8, offset: u8, val: u32) {
+    let address = ((bus as u32) << 16)
+        | ((slot as u32) << 11)
+        | ((func as u32) << 8)
+        | ((offset as u32) & 0xFC)
+        | 0x8000_0000;
+
+    outl(PCI_CONFIG_ADDR, address);
+    outl(PCI_CONFIG_DATA, val);
+}
+
 /// Helper to check if a device is present and get its vendor ID
 unsafe fn get_vendor_id(bus: u8, slot: u8, func: u8) -> u16 {
     let val = pci_read_config_u32(bus, slot, func, 0);
