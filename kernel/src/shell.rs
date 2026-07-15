@@ -24,7 +24,9 @@ pub fn print_logo() {
     unsafe {
         vga::set_color(CURRENT_THEME.text_fg, CURRENT_THEME.text_bg);
     }
-    vga::print_str("Keira Kernel 0.7.0-keira-1 (tty1)\n\n");
+    vga::print_str("Keira Kernel ");
+    vga::print_str(env!("CARGO_PKG_VERSION"));
+    vga::print_str("-keira-1 (tty1)\n\n");
 }
 
 /// Print the shell prompt and record cursor position

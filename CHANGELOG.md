@@ -4,6 +4,12 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-07-15
+
+### Changed
+- Replaced hardcoded version strings in Rust source files (`kernel/src/entry.rs`, `kernel/src/shell.rs`, `kernel/src/shell/editor.rs`, and `kernel/src/shell/cmds/system.rs`) with dynamic compile-time package version fetching (`env!("CARGO_PKG_VERSION")`).
+- Modified `Makefile` to dynamically grep and parse the active version from `Cargo.toml`.
+
 ## [0.7.0] - 2026-07-15
 
 ### Added
