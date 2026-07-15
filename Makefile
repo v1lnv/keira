@@ -68,7 +68,8 @@ QEMU_FLAGS    := -cdrom $(KERNEL_ISO) \
 	         -device ahci,id=ahci0 \
 	         -drive file=$(DISK_IMG),format=raw,id=sata0,if=none \
 	         -device ide-hd,drive=sata0,bus=ahci0.0 \
-	         -device intel-hda -device hda-duplex \
+	         -audiodev none,id=snd0 \
+	         -device intel-hda -device hda-duplex,audiodev=snd0 \
 	         -boot d \
 	         -serial stdio \
 	         -no-shutdown \
