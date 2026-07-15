@@ -17,7 +17,7 @@ void _start(void) {
     const char *greet = "Hello from freestanding ELF!";
     char buffer[64];
     memset(buffer, 0, sizeof(buffer));
-    strcpy(buffer, greet);
+    strncpy(buffer, greet, sizeof(buffer) - 1);
     printf("Testing String Copy & Format: '%s' (Length: %d)\n", buffer, (int)strlen(buffer));
 
     // Number formatting demonstration

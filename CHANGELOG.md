@@ -4,6 +4,19 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-07-15
+
+### Added
+- Standard safety documentation (`# Safety`) for all unsafe functions.
+- Bounded `strncpy` implementation to user-space string library.
+
+### Changed
+- Replaced insecure `strcpy` in user init process with bounded `strncpy` to address clang-tidy warning.
+- Marked `exception_dispatcher` as `unsafe` to resolve Rust raw pointer dereference warning.
+- Refactored `kernel/src/shell/executor.rs` and `kernel/src/shell.rs` to use `unwrap_or`, `unwrap_or_default`, and `strip_prefix` per Clippy suggestions.
+- Refactored array indexing loops in scheduler to iterator-based queries.
+- Fixed Makefile logging macros and command script generation loops to use `%s` instead of `%%s` so that actual filenames and command paths are correctly formatted and printed.
+
 ## [0.6.1] - 2026-07-08
 
 ### Changed

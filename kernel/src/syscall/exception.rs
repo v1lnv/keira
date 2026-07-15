@@ -35,8 +35,8 @@ pub struct ExceptionStackFrame {
 }
 
 #[no_mangle]
-pub extern "C" fn exception_dispatcher(frame_ptr: *const ExceptionStackFrame) {
-    let frame = unsafe { &*frame_ptr };
+pub unsafe extern "C" fn exception_dispatcher(frame_ptr: *const ExceptionStackFrame) {
+    let frame = &*frame_ptr;
 
     // Set VGA color to red on black for Kernel Panic
     vga::set_color(vga::Color::LightRed, vga::Color::Black);

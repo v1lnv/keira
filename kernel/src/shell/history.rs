@@ -3,6 +3,11 @@
 use super::state::*;
 use crate::io::vga;
 
+/// Push the current input buffer into command history
+///
+/// # Safety
+/// This function reads from and writes to global mutable states `BUFFER_LEN`,
+/// `HISTORY_COUNT`, `HISTORY`, `INPUT_BUFFER`, and `HISTORY_LENS`.
 pub unsafe fn history_push() {
     if BUFFER_LEN == 0 {
         return;
@@ -17,6 +22,10 @@ pub unsafe fn history_push() {
 }
 
 /// Replace current input buffer with history entry and redraw
+///
+/// # Safety
+/// This function modifies global mutable states `BUFFER_LEN` and `INPUT_BUFFER`,
+/// reads from `HISTORY_LENS` and `HISTORY`, and interacts with VGA hardware cursor.
 pub unsafe fn history_load(idx: usize) {
     vga::set_cursor_pos(PROMPT_ROW, PROMPT_COL);
     vga::clear_line_from(PROMPT_COL);

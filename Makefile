@@ -94,14 +94,14 @@ else
 endif
 
 # Styled logging macros
-LOG_ASM     := @printf "  $(CLR_YELLOW)$(CLR_BOLD)[ASM]$(CLR_RESET)   %%s\n"
-LOG_CC      := @printf "  $(CLR_BLUE)$(CLR_BOLD)[CC]$(CLR_RESET)    %%s\n"
-LOG_CARGO   := @printf "  $(CLR_ORANGE)$(CLR_BOLD)[CARGO]$(CLR_RESET) %%s\n"
-LOG_LD      := @printf "  $(CLR_MAGENTA)$(CLR_BOLD)[LD]$(CLR_RESET)    %%s\n"
-LOG_ISO     := @printf "  $(CLR_MAGENTA)$(CLR_BOLD)[ISO]$(CLR_RESET)   %%s\n"
-LOG_DISK    := @printf "  $(CLR_CYAN)$(CLR_BOLD)[DISK]$(CLR_RESET)  %%s\n"
-LOG_DONE    := @printf "$(CLR_GREEN)$(CLR_BOLD)[DONE]$(CLR_RESET)  %%s\n"
-LOG_INFO    := @printf "$(CLR_CYAN)$(CLR_BOLD)[INFO]$(CLR_RESET)  %%s\n"
+LOG_ASM     := printf "  $(CLR_YELLOW)$(CLR_BOLD)[ASM]$(CLR_RESET)   %s\n"
+LOG_CC      := printf "  $(CLR_BLUE)$(CLR_BOLD)[CC]$(CLR_RESET)    %s\n"
+LOG_CARGO   := printf "  $(CLR_ORANGE)$(CLR_BOLD)[CARGO]$(CLR_RESET) %s\n"
+LOG_LD      := printf "  $(CLR_MAGENTA)$(CLR_BOLD)[LD]$(CLR_RESET)    %s\n"
+LOG_ISO     := printf "  $(CLR_MAGENTA)$(CLR_BOLD)[ISO]$(CLR_RESET)   %s\n"
+LOG_DISK    := printf "  $(CLR_CYAN)$(CLR_BOLD)[DISK]$(CLR_RESET)  %s\n"
+LOG_DONE    := printf "$(CLR_GREEN)$(CLR_BOLD)[DONE]$(CLR_RESET)  %s\n"
+LOG_INFO    := printf "$(CLR_CYAN)$(CLR_BOLD)[INFO]$(CLR_RESET)  %s\n"
 
 # Sources and objects
 ASM_SRCS      := arch/x86/boot/multiboot2_header.asm \
@@ -136,7 +136,7 @@ ALL_OBJS      := $(ASM_OBJS) $(C_OBJS)
 all: $(KERNEL_ISO) $(DISK_IMG) ## Build everything (Kernel binary, RAM Disk, Hard Disk, and Bootable ISO)
 
 help: ## Show this interactive help screen containing all available targets
-	@printf "$(CLR_BOLD)Keira OS Build System (v0.6.1)$(CLR_RESET)\n"
+	@printf "$(CLR_BOLD)Keira OS Build System (v0.6.2)$(CLR_RESET)\n"
 	@printf "Usage: make <target> [COLOR=0]\n\n"
 	@printf "$(CLR_BOLD)Available Targets:$(CLR_RESET)\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -165,7 +165,7 @@ $(DISK_IMG): build/user_test.elf
 	            devices wait initrd wipe reset run write tasks demo disk list \
 	            go script view create folder delete edit say copy help history \
 	            move theme please pci grep play; do \
-	    printf '#!/system/bin\n# Keira built-in command: %%s\n# Type: kernel-mode binary\n# Path: /system/bin/%%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/system_bin/$$cmd; \
+	    printf '#!/system/bin\n# Keira built-in command: %s\n# Type: kernel-mode binary\n# Path: /system/bin/%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/system_bin/$$cmd; \
 	    mcopy -o -i $(DISK_IMG) $(BUILD_DIR)/system_bin/$$cmd ::/system/bin/$$cmd; \
 	done
 	@$(LOG_DISK) "Copying driver files and system config..."
@@ -204,7 +204,7 @@ $(BUILD_DIR)/initrd.tar: build/user_test.elf
 	            devices wait initrd wipe reset run write tasks demo disk list \
 	            go script view create folder delete edit say copy help history \
 	            move theme please pci grep play; do \
-	    printf '#!/system/bin\n# Keira built-in command: %%s\n# Type: kernel-mode binary\n# Path: /system/bin/%%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/initrd_root/system/bin/$$cmd; \
+	    printf '#!/system/bin\n# Keira built-in command: %s\n# Type: kernel-mode binary\n# Path: /system/bin/%s\n' "$$cmd" "$$cmd" > $(BUILD_DIR)/initrd_root/system/bin/$$cmd; \
 	done
 	@echo "Keira Serial Port Driver (COM1, 115200bps, 8N1)" > $(BUILD_DIR)/initrd_root/system/drivers/serial.sys
 	@echo "Keira VGA Text & Widescreen Console Driver (color support)" > $(BUILD_DIR)/initrd_root/system/drivers/vga.sys
@@ -248,12 +248,12 @@ rust: ## Build the Rust freestanding kernel module
 $(RUST_LIB): rust
 
 $(OBJ_DIR)/%.asm.o: %.asm | dirs
-	$(LOG_ASM) "$<"
+	@$(LOG_ASM) "$<"
 	@mkdir -p $(dir $@)
 	@$(ASM) $(ASM_FLAGS) -o $@ $<
 
 $(OBJ_DIR)/%.c.o: %.c | dirs
-	$(LOG_CC) "$<"
+	@$(LOG_CC) "$<"
 	@mkdir -p $(dir $@)
 	@$(CC) $(CC_FLAGS) -I drivers -I arch/x86/kernel -c -o $@ $<
 

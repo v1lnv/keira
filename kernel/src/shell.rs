@@ -24,10 +24,13 @@ pub fn print_logo() {
     unsafe {
         vga::set_color(CURRENT_THEME.text_fg, CURRENT_THEME.text_bg);
     }
-    vga::print_str("Keira Kernel 0.6.1-keira-1 (tty1)\n\n");
+    vga::print_str("Keira Kernel 0.6.2-keira-1 (tty1)\n\n");
 }
 
 /// Print the shell prompt and record cursor position
+///
+/// # Safety
+/// This function reads from global mutable state `CURRENT_USER` and `CURRENT_USER_LEN`.
 pub unsafe fn get_current_user_home() -> &'static str {
     match core::str::from_utf8(&CURRENT_USER[..CURRENT_USER_LEN]) {
         Ok("admin") => "users/admin",
@@ -54,10 +57,7 @@ pub fn print_prompt() {
         vga::print_str("@keira ");
         
         vga::set_color(CURRENT_THEME.path, CURRENT_THEME.text_bg);
-        let current_path = match core::str::from_utf8(&SHELL_PATH[..SHELL_PATH_LEN]) {
-            Ok(s) => s,
-            Err(_) => "",
-        };
+        let current_path = core::str::from_utf8(&SHELL_PATH[..SHELL_PATH_LEN]).unwrap_or_default();
 
         let home_path = get_current_user_home();
 
@@ -95,13 +95,10 @@ pub fn print_prompt() {
 
 pub fn run_boot_script() {
     unsafe {
-        match crate::fs::fat::change_directory("/users/default") {
-            Ok(_) => {
-                let initial_path = "users/default";
-                SHELL_PATH[..initial_path.len()].copy_from_slice(initial_path.as_bytes());
-                SHELL_PATH_LEN = initial_path.len();
-            }
-            Err(_) => {}
+        if crate::fs::fat::change_directory("/users/default").is_ok() {
+            let initial_path = "users/default";
+            SHELL_PATH[..initial_path.len()].copy_from_slice(initial_path.as_bytes());
+            SHELL_PATH_LEN = initial_path.len();
         }
     }
 }

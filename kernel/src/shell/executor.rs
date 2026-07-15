@@ -134,10 +134,8 @@ pub fn execute_command(cmd: &str) {
                     return;
                 }
 
-                let user_str = match core::str::from_utf8(&CURRENT_USER[..CURRENT_USER_LEN]) {
-                    Ok(s) => s,
-                    Err(_) => "default",
-                };
+                let user_str = core::str::from_utf8(&CURRENT_USER[..CURRENT_USER_LEN])
+                    .unwrap_or("default");
                 vga::print_str("[please] password for ");
                 vga::print_str(user_str);
                 vga::print_str(": ");
@@ -316,11 +314,7 @@ pub fn execute_command_inner(cmd: &str) {
     };
 
     // PATH resolution: strip /system/bin/ prefix if present
-    let command = if raw_command.starts_with("/system/bin/") {
-        &raw_command[12..] // len("/system/bin/") == 12
-    } else {
-        raw_command
-    };
+    let command = raw_command.strip_prefix("/system/bin/").unwrap_or(raw_command);
 
     match command {
         "guide" => super::cmds::guide::run(&mut parts),

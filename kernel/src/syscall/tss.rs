@@ -48,6 +48,11 @@ extern "C" {
 
 /// Initialize User Mode structures: populates GDT TSS entry, reloads GDT,
 /// loads TSS register, and configures syscall MSR registers.
+///
+/// # Safety
+/// This function executes highly privileged CPU instructions to configure the
+/// Task State Segment (TSS) and Model Specific Registers (MSRs) for user mode.
+/// Must only be called once during kernel initialization.
 pub unsafe fn init_user_mode() {
     let tss_addr = &raw const TSS as u64;
     let tss_size = core::mem::size_of::<TaskStateSegment>() as u64 - 1;

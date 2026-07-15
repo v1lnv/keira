@@ -45,3 +45,16 @@ char *strcpy(char *dest, const char *src) {
         ;
     return dest;
 }
+
+char *strncpy(char *dest, const char *src, unsigned long n) {
+    char *d = dest;
+    while (n > 0 && *src) {
+        *d++ = *src++;
+        n--;
+    }
+    while (n > 0) {
+        *d++ = '\0';
+        n--;
+    }
+    return dest;
+}

@@ -1,5 +1,7 @@
 //! Keira Kernel: Multitasking Scheduler Logic
 
+#![allow(clippy::needless_range_loop)]
+
 use super::types::{InterruptContext, Task, TaskState};
 use crate::io::serial;
 use crate::io::vga;
@@ -12,6 +14,10 @@ pub static mut CURRENT_TASK_IDX: usize = 0;
 pub static mut SCHEDULER_INITIALIZED: bool = false;
 
 /// Initialize the scheduler and register the bootstrap thread as Task 0
+///
+/// # Safety
+/// This function modifies global mutable state `TASKS` and `CURRENT_TASK_IDX`.
+/// Must be called only once during early initialization.
 pub unsafe fn init() {
     let main_task = Task {
         id: 0,
@@ -26,6 +32,10 @@ pub unsafe fn init() {
 }
 
 /// Spawn a new kernel thread
+///
+/// # Safety
+/// This function modifies global mutable state `TASKS` and allocates physical memory
+/// for the task stack. Must be called in kernel context.
 pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'static str> {
     let mut slot = None;
     for i in 0..MAX_TASKS {
@@ -59,7 +69,7 @@ pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'st
     (*context_ptr).rcx = 0;
     (*context_ptr).rax = 0;
 
-    (*context_ptr).rip = entry_point as u64;
+    (*context_ptr).rip = entry_point as usize as u64;
     (*context_ptr).cs = 0x08;
     (*context_ptr).rflags = 0x202;
     (*context_ptr).rsp = stack_top;
@@ -85,6 +95,10 @@ pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'st
 }
 
 /// Terminate the currently running task
+///
+/// # Safety
+/// This function disables interrupts, modifies the task state of the current task
+/// in the global `TASKS` array, and halts the CPU until the next scheduler tick.
 pub unsafe fn exit_current() {
     core::arch::asm!("cli");
     let idx = CURRENT_TASK_IDX;
@@ -106,6 +120,10 @@ pub unsafe fn exit_current() {
 }
 
 /// Preemptive scheduler tick called from PIT timer interrupt
+///
+/// # Safety
+/// This function is called directly from an interrupt handler. It modifies the task states
+/// and schedules the next task, changing register state.
 #[no_mangle]
 pub unsafe extern "C" fn schedule_tick(current_rsp: u64) -> u64 {
     crate::io::vga::handle_timer_tick();
@@ -174,6 +192,10 @@ pub unsafe extern "C" fn schedule_tick(current_rsp: u64) -> u64 {
     current_rsp
 }
 
+/// List all registered tasks
+///
+/// # Safety
+/// This function reads from global mutable state `TASKS` and writes to VGA hardware.
 pub unsafe fn list_tasks() {
     vga::set_color(vga::Color::LightBlue, vga::Color::Black);
     vga::print_str("PID    TASK NAME             STATE\n");
