@@ -66,3 +66,22 @@ The File Allocation Table (FAT) is a linked list of cluster indices stored in se
 1. Resolves the file's directory entry.
 2. Traverses the FAT chain starting from the file's first cluster, marking each cluster word in the FAT table as `0x0000` (free).
 3. Overwrites the first byte of the file's directory entry filename with `0xE5` (deleted) and flushes the sector to disk.
+
+---
+
+## 5. Long File Names (LFN) Support
+
+Keira v0.8.0 implements support for FAT Long File Names (LFN):
+- **LFN Entry Format**: An LFN entry has attributes set to `0x0F` (a combination of Read Only, Hidden, System, and Volume ID attributes that prevents legacy systems from displaying them). It contains 13 Unicode (UTF-16) characters distributed across three name parts.
+- **Sequence Mapping**: LFN entries occur sequentially *before* their associated 8.3 directory entry, in reverse order. The sequence byte indicates their index (1-based), with the final logical LFN entry having bit 6 (`0x40`) set.
+- **LFN Accumulator**: As the driver traverses directory sectors, it parses sequential entries with attribute `0x0F` and accumulates their characters in a `LfnAccumulator` buffer at the appropriate sequence offsets. When a standard directory entry is reached, the accumulated characters are decoded into a UTF-8 string, resetting the accumulator for the next entry.
+
+---
+
+## 6. Virtual File System (VFS) & Mounts
+
+To unify file interactions across multiple filesystems (such as FAT16 on hard disk and TAR on RAM disk/Initrd), Keira provides a **Virtual File System (VFS)** routing layer:
+- **Unified Path Routing**: The VFS layer intercepts paths and identifies their destination based on path prefixes.
+  - Paths prefixed with `/initrd/` are routed to the read-only `tar` filesystem.
+  - All other absolute or relative paths default to the read-write `fat` filesystem.
+- **Unified APIs**: System components and shell commands access data exclusively using `vfs::read_file`, `vfs::write_file`, `vfs::create_file`, and `vfs::remove_entry` rather than calling the FAT16 or Tar drivers directly.

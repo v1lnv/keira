@@ -50,3 +50,8 @@ The kernel exposes the following system calls to Ring 3 applications:
 | **3** | `sys_sleep` | `void sys_sleep(unsigned long ms)` | Pauses user thread execution for a duration in milliseconds. |
 | **4** | `sys_uptime` | `unsigned long sys_uptime(void)` | Returns system uptime since boot in milliseconds. |
 | **5** | `sys_exec` | `int sys_exec(const char *filename)` | Loads a dynamic ELF executable from disk and executes it. |
+| **6** | `sys_open` | `int sys_open(const char *path, int write_mode)` | Opens a file at the given path. Returns fd index or -1 on error. |
+| **7** | `sys_read` | `int sys_read(int fd, void *buf, int len)` | Reads up to `len` bytes from the open file descriptor into `buf`. Returns bytes read. |
+| **8** | `sys_write` | `int sys_write(int fd, const void *buf, int len)` | Writes up to `len` bytes from `buf` into the open file descriptor. Returns bytes written. |
+| **9** | `sys_close` | `int sys_close(int fd)` | Closes the file descriptor. Returns 0 on success, or -1 on error. |
+| **10** | `sys_seek` | `int sys_seek(int fd, unsigned long offset)` | Seeks to a specific offset pointer in the open file descriptor. Returns 0. |
