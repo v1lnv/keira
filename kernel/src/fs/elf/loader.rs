@@ -120,6 +120,13 @@ pub unsafe fn run_user_program(filename: &str) -> Result<(), &'static str> {
         *stack_ptr.add(i) = 0;
     }
 
+    // 3.5. Initialize heap boundaries for the user process
+    let task = &mut crate::task::scheduler::TASKS[crate::task::scheduler::CURRENT_TASK_IDX];
+    if let Some(t) = task {
+        t.program_break = 0x600000000000;
+        t.program_break_start = 0x600000000000;
+    }
+
     // 4. Perform Ring 3 transition using assembly routine
     extern "C" {
         fn jump_to_user(entry: u64, stack_top: u64);
@@ -127,6 +134,21 @@ pub unsafe fn run_user_program(filename: &str) -> Result<(), &'static str> {
 
     // Pass the top of the stack (grows down, so vaddr + PAGE_SIZE)
     jump_to_user(entry_point, user_stack_vaddr + pmm::PAGE_SIZE);
+
+    // 4.5. Clean up any allocated user heap memory
+    let mut end_break = 0x600000000000;
+    let task = &mut crate::task::scheduler::TASKS[crate::task::scheduler::CURRENT_TASK_IDX];
+    if let Some(t) = task {
+        end_break = t.program_break;
+        t.program_break = 0;
+        t.program_break_start = 0;
+    }
+    
+    let mut addr = 0x600000000000;
+    while addr < end_break {
+        let _ = vmm::free_and_unmap_page(addr);
+        addr += pmm::PAGE_SIZE;
+    }
 
     // 5. Clean up the stack frame after program exits back to kernel
     pmm::free_frame(stack_frame);

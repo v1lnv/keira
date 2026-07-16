@@ -148,10 +148,10 @@ help: ## Show this interactive help screen containing all available targets
 
 user: build/user_test.elf ## Build user space initialization program and library
 
-build/user_test.elf: user/apps/init/main.c user/lib/syscall.c user/lib/string.c user/lib/stdio.c user/linker.ld | dirs
-	@$(LOG_INFO) "Compiling user space program and modular library..."
-	@$(CC) -ffreestanding -nostdlib -fno-stack-protector -m64 -O2 -Iuser/lib -T user/linker.ld \
-	        user/apps/init/main.c user/lib/syscall.c user/lib/string.c user/lib/stdio.c \
+build/user_test.elf: user/apps/init/main.c user/lib/syscall.c user/lib/string.c user/lib/stdio.c user/lib/malloc.c user/linker.ld | dirs
+	@$(LOG_INFO) "Building user space program and library..."
+	@$(CC) -ffreestanding -nostdlib -fno-stack-protector -m64 -O2 -Iuser/lib -Iuser/lib/include -T user/linker.ld \
+	        user/apps/init/main.c user/lib/syscall.c user/lib/string.c user/lib/stdio.c user/lib/malloc.c \
 	        -o build/user_test.elf -Wl,--no-warn-rwx-segments -static -no-pie
 
 disk: $(DISK_IMG) ## Force rebuild and populate FAT16 harddisk block image

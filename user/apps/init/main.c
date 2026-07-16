@@ -8,6 +8,8 @@
 #include "../../lib/include/stdio.h"   // IWYU pragma: keep
 #include "../../lib/include/string.h"  // IWYU pragma: keep
 #include "../../lib/include/syscall.h" // IWYU pragma: keep
+#include "../../lib/include/malloc.h"
+
 
 void _start(void) {
     printf("Keira Freestanding User Program\n");
@@ -52,6 +54,23 @@ void _start(void) {
     } else {
         printf("  Failed to open /data/log/test.log\n\n");
     }
+
+    // Dynamic memory test
+    printf("Testing Dynamic Memory (malloc & free):\n");
+    char *heap_str = (char *)malloc(32);
+    if (heap_str != NULL) {
+        strncpy(heap_str, "Heap Allocation Works!", 31);
+        printf("  Allocated 32 bytes on heap: '%s'\n", heap_str);
+        free(heap_str);
+        printf("  Freed heap memory successfully.\n\n");
+    } else {
+        printf("  Failed to allocate memory on heap.\n\n");
+    }
+
+    // Process Crash Protection test (uncomment to trigger)
+    // printf("Testing Page Fault Exception Protection (accessing NULL pointer):\n");
+    // volatile int *invalid_ptr = (volatile int *)0;
+    // *invalid_ptr = 42;
 
     printf("Exiting User Mode and returning to Kernel shell.\n");
     sys_exit();

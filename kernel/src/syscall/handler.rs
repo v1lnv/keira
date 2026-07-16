@@ -247,6 +247,67 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
             }
             u64::MAX
         }
+        // Syscall 11: sbrk
+        // Signature: sys_sbrk(increment: i64) -> u64
+        11 => {
+            let increment = arg1 as i64;
+            unsafe {
+                let task = &mut crate::task::scheduler::TASKS[crate::task::scheduler::CURRENT_TASK_IDX];
+                if let Some(t) = task {
+                    let old_break = t.program_break;
+                    if increment == 0 {
+                        return old_break;
+                    }
+                    
+                    let new_break = if increment > 0 {
+                        old_break.saturating_add(increment as u64)
+                    } else {
+                        let dec = (-increment) as u64;
+                        if dec > old_break - t.program_break_start {
+                            return u64::MAX; // Cannot shrink below start
+                        }
+                        old_break - dec
+                    };
+
+                    if new_break > 0x7FFFFFFF0000 {
+                        return u64::MAX; // Cannot overwrite user stack
+                    }
+
+                    if increment > 0 {
+                        let mut addr = (old_break / 4096) * 4096;
+                        if addr < old_break && addr >= t.program_break_start {
+                            addr += 4096;
+                        }
+                        let end_addr = new_break.div_ceil(4096) * 4096;
+                        while addr < end_addr {
+                            if crate::mem::vmm::get_phys_addr(addr).is_none() {
+                                let frame = match crate::mem::pmm::alloc_frame() {
+                                    Some(f) => f,
+                                    None => return u64::MAX,
+                                };
+                                if crate::mem::vmm::map_page(addr, frame, crate::mem::vmm::PAGE_USER | crate::mem::vmm::PAGE_WRITABLE | crate::mem::vmm::PAGE_PRESENT).is_err() {
+                                    crate::mem::pmm::free_frame(frame);
+                                    return u64::MAX;
+                                }
+                            }
+                            addr += 4096;
+                        }
+                    } else {
+                        let start_unmap = new_break.div_ceil(4096) * 4096;
+                        let end_unmap = old_break.div_ceil(4096) * 4096;
+                        let mut addr = start_unmap;
+                        while addr < end_unmap {
+                            let _ = crate::mem::vmm::free_and_unmap_page(addr);
+                            addr += 4096;
+                        }
+                    }
+
+                    t.program_break = new_break;
+                    return old_break;
+                }
+            }
+            u64::MAX
+        }
         _ => {
             u64::MAX // Unknown syscall
         }

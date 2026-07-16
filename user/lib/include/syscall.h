@@ -15,5 +15,6 @@ int sys_read(int fd, void *buf, int len);
 int sys_write(int fd, const void *buf, int len);
 int sys_close(int fd);
 int sys_seek(int fd, unsigned long offset);
+void *sys_sbrk(long increment);
 
 #endif // USER_SYSCALL_H

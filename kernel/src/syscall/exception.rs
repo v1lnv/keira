@@ -38,6 +38,32 @@ pub struct ExceptionStackFrame {
 pub unsafe extern "C" fn exception_dispatcher(frame_ptr: *const ExceptionStackFrame) {
     let frame = &*frame_ptr;
 
+    // Check if the exception occurred in User Mode (Ring 3)
+    if (frame.cs & 3) == 3 {
+        vga::set_color(vga::Color::LightRed, vga::Color::Black);
+        vga::print_str("\n*** USER PROCESS CRASHED ***\n");
+        vga::print_str("Exception Vector: ");
+        vga::print_u64(frame.vector);
+        if frame.vector == 14 {
+            vga::print_str(" (Page Fault)");
+        } else if frame.vector == 13 {
+            vga::print_str(" (General Protection Fault)");
+        }
+        vga::print_str("\nRIP: 0x");
+        print_hex(frame.rip);
+        if frame.vector == 14 {
+            let cr2: u64;
+            core::arch::asm!("mov {}, cr2", out(reg) cr2);
+            vga::print_str(" | Faulting Address: 0x");
+            print_hex(cr2);
+        }
+        vga::print_str("\nTerminating crashed user process...\n");
+        vga::set_color(vga::Color::LightGrey, vga::Color::Black);
+
+        // Terminate the active task
+        crate::task::scheduler::exit_current();
+    }
+
     // Set VGA color to red on black for Kernel Panic
     vga::set_color(vga::Color::LightRed, vga::Color::Black);
 

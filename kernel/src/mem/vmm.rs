@@ -125,6 +125,17 @@ pub unsafe fn unmap_page(virtual_addr: u64) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Unmap a virtual page and free its underlying physical frame
+pub unsafe fn free_and_unmap_page(virtual_addr: u64) -> Result<(), &'static str> {
+    if let Some(phys) = get_phys_addr(virtual_addr) {
+        unmap_page(virtual_addr)?;
+        pmm::free_frame(phys);
+        Ok(())
+    } else {
+        Err("Virtual address not mapped")
+    }
+}
+
 /// Translate a virtual address to its corresponding physical address
 pub unsafe fn get_phys_addr(virtual_addr: u64) -> Option<u64> {
     let pml4_idx = ((virtual_addr >> 39) & 0x1FF) as usize;

@@ -61,3 +61,9 @@ int sys_seek(int fd, unsigned long offset) {
     __asm__ volatile("syscall" : "=a"(res) : "a"(10), "D"((unsigned long)fd), "S"(offset) : "rcx", "r11", "memory");
     return (int)res;
 }
+
+void *sys_sbrk(long increment) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(11), "D"((unsigned long)increment) : "rcx", "r11", "memory");
+    return (void *)res;
+}

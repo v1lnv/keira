@@ -41,6 +41,8 @@ pub struct Task {
     pub stack_addr: u64, // Physical frame address for the stack
     pub state: TaskState,
     pub fds: [FileDescriptor; 8],
+    pub program_break: u64,
+    pub program_break_start: u64,
 }
 
 #[repr(C, packed)]
