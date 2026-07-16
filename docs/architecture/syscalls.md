@@ -55,3 +55,4 @@ The kernel exposes the following system calls to Ring 3 applications:
 | **8** | `sys_write` | `int sys_write(int fd, const void *buf, int len)` | Writes up to `len` bytes from `buf` into the open file descriptor. Returns bytes written. |
 | **9** | `sys_close` | `int sys_close(int fd)` | Closes the file descriptor. Returns 0 on success, or -1 on error. |
 | **10** | `sys_seek` | `int sys_seek(int fd, unsigned long offset)` | Seeks to a specific offset pointer in the open file descriptor. Returns 0. |
+| **11** | `sys_sbrk` | `void *sys_sbrk(long increment)` | Dynamically expands or shrinks the program break pointer, allocating or freeing physical heap pages. Returns the previous program break address. |

@@ -55,3 +55,17 @@ A dedicated heap memory manager is implemented in `mm/heap/heap.c` for low-level
 - **Allocation Rules**:
   - `malloc(size)`: Performs a first-fit search in the free block list, splits the block if it is larger than requested, and returns the pointer.
   - `free(ptr)`: Merges adjacent free blocks immediately (coalescing) to prevent heap fragmentation.
+
+---
+
+## 4. User-Space Heap & Program Break
+
+Keira v0.9.0 introduces dynamic user-space heap allocation:
+- **Program Break tracking**: Each process tracks its active heap boundaries using `program_break` and `program_break_start` within its `Task` structure.
+- **Virtual Memory Region**: The user heap is configured to start at address `0x600000000000` (isolated from the stack at `0x7FFFFFFF0000` and binary segments).
+- **System Call `sys_sbrk`**: Expands or shrinks the program break pointer:
+  - Aligns boundary changes to 4KB page frames.
+  - Dynamically maps newly allocated physical pages with User + Writable permissions into the page tables.
+  - Automatically unmaps and reclaims physical page frames on shrinking.
+- **User-Space Allocator (`malloc` & `free`)**: Built as an implicit free-list memory manager inside `libkeira`, providing aligned, split-block, and coalesced block mappings on top of `sys_sbrk`.
+- **Automatic Heap Cleanup**: When a user process exits, the loader iterates from `0x600000000000` up to `program_break`, calling `vmm::free_and_unmap_page` to release all allocated physical frames and clear the page table mappings to prevent memory leaks.
