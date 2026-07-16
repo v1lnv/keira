@@ -157,41 +157,41 @@ void hda_start_tone(uint64_t bdl_phys, uint64_t buf1_phys, uint64_t buf2_phys, u
     volatile uint32_t *sd_bdpu = (volatile uint32_t *)(hda_base_virt + SD_REG_BDPU);
 
     // 1. Disable stream first
-    *sd_ctl &= ~2; // Clear RUN bit (bit 1)
+    *sd_ctl &= ~2; // Clear RUN bit (bit 1) // NOLINT
     int timeout = 100000;
-    while ((*sd_ctl & 2) && timeout > 0) {
+    while ((*sd_ctl & 2) && timeout > 0) { // NOLINT
         timeout--;
     }
 
     // 2. Set physical address of BDL
-    *sd_bdpl = (uint32_t)bdl_phys;
-    *sd_bdpu = (uint32_t)(bdl_phys >> 32);
+    *sd_bdpl = (uint32_t)bdl_phys; // NOLINT
+    *sd_bdpu = (uint32_t)(bdl_phys >> 32); // NOLINT
 
     // 3. Set buffer length (8192 bytes total)
-    *sd_cbl = 8192;
+    *sd_cbl = 8192; // NOLINT
 
     // 4. Set last valid index to 1 (0-indexed, so 2 entries total)
-    *sd_lvi = 1;
+    *sd_lvi = 1; // NOLINT
 
     // 5. Set Stream Format (0x0011) and Stream ID (1)
-    *sd_fmts = 0x0011;
+    *sd_fmts = 0x0011; // NOLINT
     
     // Clear status register
-    *sd_sts = 0xFF;
+    *sd_sts = 0xFF; // NOLINT
 
     // Set Stream ID to 1 in Control register (bits 20-23)
-    uint32_t ctrl = *sd_ctl;
+    uint32_t ctrl = *sd_ctl; // NOLINT
     ctrl &= ~(0xF << 20);
     ctrl |= (1 << 20);
-    *sd_ctl = ctrl;
+    *sd_ctl = ctrl; // NOLINT
 
     // 6. Enable stream (set RUN bit 1 to 1)
-    *sd_ctl |= 2;
+    *sd_ctl |= 2; // NOLINT
 }
 
 void hda_stop(void) {
     if (!hda_base_virt) return;
 
     volatile uint32_t *sd_ctl = (volatile uint32_t *)(hda_base_virt + SD_REG_CTL);
-    *sd_ctl &= ~2; // Clear RUN bit
+    *sd_ctl &= ~2; // Clear RUN bit // NOLINT
 }

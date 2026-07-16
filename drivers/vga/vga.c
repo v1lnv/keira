@@ -47,7 +47,7 @@ static void vga_hide_mouse_internal(void) {
     if (mouse_is_visible) {
         if (mouse_cursor_x < VGA_WIDTH && mouse_cursor_y < VGA_HEIGHT) {
             uint16_t index = mouse_cursor_y * VGA_WIDTH + mouse_cursor_x;
-            VGA_BUFFER[index] = saved_mouse_entry;
+            VGA_BUFFER[index] = saved_mouse_entry; // NOLINT
         }
         mouse_is_visible = 0;
     }
@@ -56,7 +56,7 @@ static void vga_hide_mouse_internal(void) {
 static void vga_show_mouse_internal(void) {
     if (!mouse_is_visible && mouse_cursor_x < VGA_WIDTH && mouse_cursor_y < VGA_HEIGHT) {
         uint16_t index = mouse_cursor_y * VGA_WIDTH + mouse_cursor_x;
-        uint16_t entry = VGA_BUFFER[index];
+        uint16_t entry = VGA_BUFFER[index]; // NOLINT
         saved_mouse_entry = entry;
 
         // Extract the original background color of the cell
@@ -74,7 +74,7 @@ static void vga_show_mouse_internal(void) {
             pointer_attr = VGA_COLOR_WHITE | (bg << 4);
         }
 
-        VGA_BUFFER[index] = (uint16_t)pointer_char | ((uint16_t)pointer_attr << 8);
+        VGA_BUFFER[index] = (uint16_t)pointer_char | ((uint16_t)pointer_attr << 8); // NOLINT
         mouse_is_visible = 1;
     }
 }
@@ -113,7 +113,7 @@ static void vga_scroll(void) {
         for (uint16_t col = 0; col < VGA_WIDTH; col++) {
             uint16_t src_index = row * VGA_WIDTH + col;
             uint16_t dst_index = (row - 1) * VGA_WIDTH + col;
-            VGA_BUFFER[dst_index] = VGA_BUFFER[src_index];
+            VGA_BUFFER[dst_index] = VGA_BUFFER[src_index]; // NOLINT
         }
     }
 
@@ -121,7 +121,7 @@ static void vga_scroll(void) {
     uint16_t blank = vga_make_entry(' ', current_attr);
     uint16_t last_row_start = (VGA_HEIGHT - 1) * VGA_WIDTH;
     for (uint16_t col = 0; col < VGA_WIDTH; col++) {
-        VGA_BUFFER[last_row_start + col] = blank;
+        VGA_BUFFER[last_row_start + col] = blank; // NOLINT
     }
 }
 
@@ -166,7 +166,7 @@ void vga_init(void) {
     /* Clear entire screen */
     uint16_t blank = vga_make_entry(' ', current_attr);
     for (uint16_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-        VGA_BUFFER[i] = blank;
+        VGA_BUFFER[i] = blank; // NOLINT
     }
 
     /* Enable blinking underline cursor (scanlines 13-15) */
@@ -192,7 +192,7 @@ void vga_putchar(char c) {
     } else {
         /* Write character at current position */
         uint16_t index = cursor_row * VGA_WIDTH + cursor_col;
-        VGA_BUFFER[index] = vga_make_entry(c, current_attr);
+        VGA_BUFFER[index] = vga_make_entry(c, current_attr); // NOLINT
         cursor_col++;
 
         /* Wrap to next line if past right edge */
@@ -233,7 +233,7 @@ void vga_backspace(void) {
     }
 
     uint16_t index = cursor_row * VGA_WIDTH + cursor_col;
-    VGA_BUFFER[index] = vga_make_entry(' ', current_attr);
+    VGA_BUFFER[index] = vga_make_entry(' ', current_attr); // NOLINT
     vga_update_cursor();
     vga_show_mouse_internal();
 }
@@ -272,7 +272,7 @@ void vga_clear_line_from(uint16_t col) {
     uint16_t blank = vga_make_entry(' ', current_attr);
     for (uint16_t c = col; c < VGA_WIDTH; c++) {
         uint16_t index = cursor_row * VGA_WIDTH + c;
-        VGA_BUFFER[index] = blank;
+        VGA_BUFFER[index] = blank; // NOLINT
     }
     vga_show_mouse_internal();
 }

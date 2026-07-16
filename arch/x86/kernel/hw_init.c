@@ -105,7 +105,7 @@ void hw_init(void) {
     rtc_init();
     print_boot_log("Reading CMOS Real-Time Clock (RTC) date/time registers", 0);
 
-    heap_init(&__heap_start, (size_t)(&__heap_end - &__heap_start));
+    heap_init(&__heap_start, (size_t)((uintptr_t)&__heap_end - (uintptr_t)&__heap_start));
     print_boot_log("Determining kernel C heap memory boundaries", 0);
     print_boot_log("Initializing local C heap allocator space (1MB)", 0);
 
