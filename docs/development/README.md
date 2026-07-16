@@ -10,3 +10,5 @@ This directory provides developer tutorials, build systems documentation, emulat
   QEMU port forwarding, remote GDB sessions, and tracing kernel main.
 - **[Creating Custom Shell Commands](new_command.md)**
   Step-by-step tutorial on writing, registering, mapping, and documenting new commands.
+- **[Writing User-Space Programs](user_apps.md)**
+  Step-by-step guide to developing, registering, and running Ring 3 user-space programs using libkeira.

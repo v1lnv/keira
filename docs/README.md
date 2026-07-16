@@ -42,3 +42,4 @@ Practical guides for setting up environments, compiling, testing, source-level d
 * [Building & Toolchain](development/building.md)
 * [Debugging with GDB](development/debugging.md)
 * [Creating Custom Shell Commands](development/new_command.md)
+* [Writing User-Space Programs](development/user_apps.md)
