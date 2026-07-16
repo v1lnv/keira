@@ -147,9 +147,9 @@ help: ## Show this interactive help screen containing all available targets
 	@printf "\n"
 
 USER_LIB_SRCS := user/lib/syscall.c user/lib/string.c user/lib/stdio.c user/lib/malloc.c
-USER_CC_FLAGS  := -ffreestanding -nostdlib -fno-stack-protector -m64 -O2 -Iuser/lib -Iuser/lib/include -T user/linker.ld -Wl,--no-warn-rwx-segments -static -no-pie
+USER_CC_FLAGS  := -ffreestanding -nostdlib -fno-stack-protector -m64 -O2 -mno-sse -mno-sse2 -mno-mmx -mno-sse3 -mno-ssse3 -mno-sse4.1 -mno-sse4.2 -mno-avx -mno-avx2 -Iuser/lib -Iuser/lib/include -T user/linker.ld -Wl,--no-warn-rwx-segments -static -no-pie
 
-user: build/user_test.elf build/hello.elf ## Build user space programs and library
+user: build/user_test.elf build/hello.elf build/kcc.elf ## Build user space programs and library
 
 build/user_test.elf: user/apps/init/main.c $(USER_LIB_SRCS) user/linker.ld | dirs
 	@$(LOG_INFO) "Building user space program: init (user_test.elf)..."
@@ -159,15 +159,19 @@ build/hello.elf: user/apps/hello/main.c $(USER_LIB_SRCS) user/linker.ld | dirs
 	@$(LOG_INFO) "Building user space program: hello (hello.elf)..."
 	@$(CC) $(USER_CC_FLAGS) user/apps/hello/main.c $(USER_LIB_SRCS) -o build/hello.elf
 
+build/kcc.elf: user/apps/kcc/main.c $(USER_LIB_SRCS) user/linker.ld | dirs
+	@$(LOG_INFO) "Building user space program: kcc (kcc.elf)..."
+	@$(CC) $(USER_CC_FLAGS) user/apps/kcc/main.c $(USER_LIB_SRCS) -o build/kcc.elf
+
 disk: $(DISK_IMG) ## Force rebuild and populate FAT16 harddisk block image
 
-$(DISK_IMG): build/user_test.elf build/hello.elf
+$(DISK_IMG): build/user_test.elf build/hello.elf build/kcc.elf
 	@rm -f $(DISK_IMG)
 	@$(LOG_DISK) "Creating 32MB FAT16 disk image..."
 	@dd if=/dev/zero of=$(DISK_IMG) bs=1M count=32 2>/dev/null
 	@mkfs.fat -F 16 $(DISK_IMG) >/dev/null
 	@$(LOG_DISK) "Creating nested Keira directory structure..."
-	@mmd -i $(DISK_IMG) ::/system ::/system/bin ::/system/drivers ::/apps ::/apps/bin ::/apps/games ::/config ::/config/boot ::/config/theme ::/users ::/users/admin ::/users/default ::/users/guest ::/temp ::/data ::/data/log ::/data/save 2>/dev/null || true
+	@mmd -i $(DISK_IMG) ::/system ::/system/bin ::/system/drivers ::/system/include ::/apps ::/apps/bin ::/apps/games ::/apps/src ::/config ::/config/boot ::/config/theme ::/users ::/users/admin ::/users/default ::/users/guest ::/temp ::/data ::/data/log ::/data/save 2>/dev/null || true
 	@$(LOG_DISK) "Populating directories with command binaries..."
 	@mkdir -p $(BUILD_DIR)/system_bin
 	@for cmd in guide login drives use ramdisk system cpu runtime time memory \
@@ -195,14 +199,19 @@ $(DISK_IMG): build/user_test.elf build/hello.elf
 	@$(LOG_DISK) "Copying binaries and configuration files..."
 	@mcopy -o -i $(DISK_IMG) build/user_test.elf ::/apps/bin/user_test.elf
 	@mcopy -o -i $(DISK_IMG) build/hello.elf ::/apps/bin/hello.elf
+	@mcopy -o -i $(DISK_IMG) build/kcc.elf ::/apps/bin/kcc.elf
+	@for header in stdio.h string.h syscall.h malloc.h; do mcopy -o -i $(DISK_IMG) user/lib/include/$$header ::/system/include/$$header; done
+	@mcopy -o -i $(DISK_IMG) user/apps/kcc/demo.c ::/apps/src/demo.c
 
 initrd: $(BUILD_DIR)/initrd.tar ## Force rebuild the RAM disk USTAR archive
 
-$(BUILD_DIR)/initrd.tar: build/user_test.elf build/hello.elf
+$(BUILD_DIR)/initrd.tar: build/user_test.elf build/hello.elf build/kcc.elf
 	@$(LOG_INFO) "Building RAM Disk (Initrd)..."
 	@mkdir -p $(BUILD_DIR)/initrd_root/system/bin
 	@mkdir -p $(BUILD_DIR)/initrd_root/system/drivers
+	@mkdir -p $(BUILD_DIR)/initrd_root/system/include
 	@mkdir -p $(BUILD_DIR)/initrd_root/apps/bin
+	@mkdir -p $(BUILD_DIR)/initrd_root/apps/src
 	@mkdir -p $(BUILD_DIR)/initrd_root/config/boot
 	@mkdir -p $(BUILD_DIR)/initrd_root/config/theme
 	@mkdir -p $(BUILD_DIR)/initrd_root/users/admin
@@ -227,6 +236,9 @@ $(BUILD_DIR)/initrd.tar: build/user_test.elf build/hello.elf
 	@echo "color_scheme=classic\nprompt_symbol=>\ncursor=block" > $(BUILD_DIR)/initrd_root/config/theme/default.cfg
 	@cp build/user_test.elf $(BUILD_DIR)/initrd_root/apps/bin/user_test.elf
 	@cp build/hello.elf $(BUILD_DIR)/initrd_root/apps/bin/hello.elf
+	@cp build/kcc.elf $(BUILD_DIR)/initrd_root/apps/bin/kcc.elf
+	@cp user/lib/include/*.h $(BUILD_DIR)/initrd_root/system/include/
+	@cp user/apps/kcc/demo.c $(BUILD_DIR)/initrd_root/apps/src/demo.c
 	@cd $(BUILD_DIR)/initrd_root && tar -cf ../initrd.tar *
 
 iso: $(KERNEL_ISO) ## Force rebuild and package bootable ISO release image
@@ -289,11 +301,11 @@ format: ## Automatically format all Rust and C/H source files
 	@$(LOG_INFO) "Formatting Rust code..."
 	@$(CARGO) fmt --all
 	@$(LOG_INFO) "Formatting C code..."
-	@find . -type f \( -name "*.c" -o -name "*.h" \) -exec clang-format -i {} +
+	@find . -path "./build" -prune -o -type f \( -name "*.c" -o -name "*.h" \) -exec clang-format -i {} +
 	@$(LOG_DONE) "Formatting complete"
 
 lint: ## Check C code quality using clang-tidy
 	@$(LOG_INFO) "Linting C code..."
-	@find . -type f \( -name "*.c" -o -name "*.h" \) -exec clang-tidy --quiet {} -- -I drivers -I arch/x86/include -I arch/x86/kernel -ffreestanding -m64 \;
+	@find . -path "./build" -prune -o -type f \( -name "*.c" -o -name "*.h" \) -exec clang-tidy --quiet {} -- -I drivers -I arch/x86/include -I arch/x86/kernel -ffreestanding -m64 \;
 	@$(LOG_DONE) "Linting complete"
 	

@@ -44,6 +44,9 @@ pub unsafe fn map_page(
         *pml4.add(pml4_idx) = frame | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
         frame
     } else {
+        if (flags & PAGE_USER) != 0 {
+            *pml4.add(pml4_idx) |= PAGE_USER;
+        }
         pdpt_entry & !0xFFF
     };
     let pdpt = pdpt_addr as *mut u64;
@@ -55,6 +58,9 @@ pub unsafe fn map_page(
         *pdpt.add(pdpt_idx) = frame | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
         frame
     } else {
+        if (flags & PAGE_USER) != 0 {
+            *pdpt.add(pdpt_idx) |= PAGE_USER;
+        }
         pd_entry & !0xFFF
     };
     let pd = pd_addr as *mut u64;
@@ -66,6 +72,9 @@ pub unsafe fn map_page(
         *pd.add(pd_idx) = frame | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
         frame
     } else {
+        if (flags & PAGE_USER) != 0 {
+            *pd.add(pd_idx) |= PAGE_USER;
+        }
         pt_entry & !0xFFF
     };
     let pt = pt_addr as *mut u64;

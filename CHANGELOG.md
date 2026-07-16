@@ -4,6 +4,20 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-16
+
+### Added
+- Keira C Compiler (`kcc`) in user-space (`/apps/bin/kcc.elf`) to support freestanding dynamic C compilation.
+- Automatic installation of system headers (`stdio.h`, `string.h`, `syscall.h`, `malloc.h`) to `/system/include/` on the FAT16 disk and RAM disk.
+- Demo C source file (`demo.c`) placed in `/apps/src/demo.c` to test compiler self-hosting directly.
+
+### Fixed
+- CPU interrupt flag restoration in Ring 0 context after user program exits (prevents system hang on idle hlt).
+- Stack overflow in VFS system calls `sys_read` and `sys_write` by replacing 4KB stack arrays with dynamic physical page frames.
+- Page Fault (Error Code 0x5) on User Mode memory access by dynamically propagating `PAGE_USER` flags to parent PML4, PDPT, and PD tables in virtual memory setup.
+- Page Fault (Error Code 0x4) on dynamically compiled program exits by generating `sys_exit` system call in `kcc` epilogue instead of `ret`.
+- Invalid Opcode exception (Vector 6) by explicitly disabling MMX/SSE/AVX register usage (`-mno-sse` etc.) in user space build flags.
+
 ## [0.10.0] - 2026-07-16
 
 ### Added

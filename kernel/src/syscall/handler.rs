@@ -144,14 +144,22 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
                             Err(_) => return u64::MAX,
                         };
 
-                        let mut file_buf = [0u8; 4096];
-                        let bytes_read = match crate::fs::vfs::read_file(path_str, &mut file_buf) {
+                        let frame = match crate::mem::pmm::alloc_frame() {
+                            Some(f) => f,
+                            None => return u64::MAX,
+                        };
+                        let file_buf = core::slice::from_raw_parts_mut(frame as *mut u8, 4096);
+                        let bytes_read = match crate::fs::vfs::read_file(path_str, file_buf) {
                             Ok(b) => b,
-                            Err(_) => return u64::MAX,
+                            Err(_) => {
+                                crate::mem::pmm::free_frame(frame);
+                                return u64::MAX;
+                            }
                         };
 
                         let offset = t.fds[fd].offset as usize;
                         if offset >= bytes_read {
+                            crate::mem::pmm::free_frame(frame);
                             return 0; // EOF
                         }
 
@@ -161,6 +169,7 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
                         }
 
                         t.fds[fd].offset += to_copy as u64;
+                        crate::mem::pmm::free_frame(frame);
                         return to_copy as u64;
                     }
                 }
@@ -186,10 +195,15 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
                             Err(_) => return u64::MAX,
                         };
 
-                        let mut file_buf = [0u8; 4096];
-                        let existing_size = crate::fs::vfs::read_file(path_str, &mut file_buf).unwrap_or(0);
+                        let frame = match crate::mem::pmm::alloc_frame() {
+                            Some(f) => f,
+                            None => return u64::MAX,
+                        };
+                        let file_buf = core::slice::from_raw_parts_mut(frame as *mut u8, 4096);
+                        let existing_size = crate::fs::vfs::read_file(path_str, file_buf).unwrap_or(0);
                         let offset = t.fds[fd].offset as usize;
                         if offset + (len as usize) > 4096 {
+                            crate::mem::pmm::free_frame(frame);
                             return u64::MAX; // Limit to 4KB
                         }
 
@@ -198,7 +212,10 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
                         }
 
                         let new_size = core::cmp::max(existing_size, offset + (len as usize));
-                        match crate::fs::vfs::write_file(path_str, &file_buf[..new_size]) {
+                        let write_res = crate::fs::vfs::write_file(path_str, &file_buf[..new_size]);
+                        crate::mem::pmm::free_frame(frame);
+
+                        match write_res {
                             Ok(_) => {
                                 t.fds[fd].offset += len;
                                 return len;
