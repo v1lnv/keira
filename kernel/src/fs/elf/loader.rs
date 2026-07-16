@@ -1,19 +1,14 @@
 //! Keira Kernel: ELF64 Binary Loader Logic
 
 use super::types::{ElfHeader, ProgramHeader, PT_LOAD};
-use crate::fs::fat;
 use crate::mem::{pmm, vmm};
 
 static mut ELF_FILE_BUF: [u8; 32768] = [0u8; 32768];
 
-/// Load an ELF binary from FAT16 disk, map pages, and return virtual entry address
+/// Load an ELF binary from Routed VFS disk, map pages, and return virtual entry address
 pub unsafe fn load_elf(filename: &str) -> Result<u64, &'static str> {
     let file_buf = unsafe { &mut *core::ptr::addr_of_mut!(ELF_FILE_BUF) };
-    let file_res = fat::read_file_content(filename, file_buf);
-    let file_len = match file_res {
-        Ok(len) => len,
-        Err(_) => crate::fs::tar::read_file_content(filename, file_buf)?,
-    };
+    let file_len = crate::fs::vfs::read_file(filename, file_buf)?;
 
     if file_len < core::mem::size_of::<ElfHeader>() {
         return Err("File is too small to be a valid ELF");

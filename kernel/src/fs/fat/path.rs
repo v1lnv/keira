@@ -2,7 +2,78 @@
 
 use super::dir::for_each_directory_sector;
 use super::read_sector;
-use super::types::{DirectoryEntry, FoundEntry};
+use super::types::{DirectoryEntry, FoundEntry, LfnEntry, LfnAccumulator};
+
+/// Accumulates unicode character parts from an LFN entry into the accumulator
+pub unsafe fn accumulate_lfn(entry: &DirectoryEntry, accum: &mut LfnAccumulator) {
+    let lfn = &*(entry as *const DirectoryEntry as *const LfnEntry);
+    let seq = lfn.sequence;
+    let index = (seq & 0x1F) as usize;
+    if index == 0 || index > 20 {
+        return;
+    }
+    
+    let char_offset = (index - 1) * 13;
+    
+    // Copy part 1 (5 chars)
+    for i in 0..5 {
+        accum.chars[char_offset + i] = lfn.name_part1[i];
+    }
+    // Copy part 2 (6 chars)
+    for i in 0..6 {
+        accum.chars[char_offset + 5 + i] = lfn.name_part2[i];
+    }
+    // Copy part 3 (2 chars)
+    for i in 0..2 {
+        accum.chars[char_offset + 11 + i] = lfn.name_part3[i];
+    }
+    
+    accum.active = true;
+    if index > accum.max_index {
+        accum.max_index = index;
+    }
+}
+
+/// Converts accumulated UTF-16 code units into a UTF-8 string buffer
+pub fn get_lfn_utf8(accum: &LfnAccumulator, buf: &mut [u8]) -> Option<usize> {
+    if !accum.active || accum.max_index == 0 {
+        return None;
+    }
+    
+    let total_chars = accum.max_index * 13;
+    let mut utf8_len = 0;
+    
+    for i in 0..total_chars {
+        let c = accum.chars[i];
+        if c == 0x0000 || c == 0xFFFF {
+            break;
+        }
+        
+        if c < 0x80 {
+            if utf8_len < buf.len() {
+                buf[utf8_len] = c as u8;
+                utf8_len += 1;
+            }
+        } else if c < 0x800 {
+            if utf8_len + 1 < buf.len() {
+                buf[utf8_len] = (0xC0 | (c >> 6)) as u8;
+                buf[utf8_len + 1] = (0x80 | (c & 0x3F)) as u8;
+                utf8_len += 2;
+            }
+        } else if utf8_len + 2 < buf.len() {
+            buf[utf8_len] = (0xE0 | (c >> 12)) as u8;
+            buf[utf8_len + 1] = (0x80 | ((c >> 6) & 0x3F)) as u8;
+            buf[utf8_len + 2] = (0x80 | (c & 0x3F)) as u8;
+            utf8_len += 3;
+        }
+    }
+    
+    if utf8_len > 0 {
+        Some(utf8_len)
+    } else {
+        None
+    }
+}
 use super::{CURRENT_DIR_CLUSTER, VOLUME};
 
 /// Helper to format 8.3 FAT filename to standard string
@@ -119,6 +190,7 @@ pub unsafe fn resolve_path(path: &str) -> Result<(u16, &str), &'static str> {
 pub unsafe fn find_entry(filename: &str, dir_cluster: u16) -> Result<FoundEntry, &'static str> {
     let mut sector_data = [0u8; 512];
     let mut found: Option<FoundEntry> = None;
+    let mut lfn_accum = LfnAccumulator::new();
 
     for_each_directory_sector(dir_cluster, |sector| {
         read_sector(sector, &mut sector_data)?;
@@ -126,39 +198,64 @@ pub unsafe fn find_entry(filename: &str, dir_cluster: u16) -> Result<FoundEntry,
         for i in 0..16 {
             let entry = &*entries.add(i);
             if entry.name[0] == 0x00 {
+                lfn_accum.reset();
                 return Ok(false);
             }
             if entry.name[0] == 0xE5 {
+                lfn_accum.reset();
                 continue;
             }
-            if (entry.attr & 0x0F) == 0x0F || (entry.attr & 0x08) != 0 {
+            if (entry.attr & 0x0F) == 0x0F {
+                accumulate_lfn(entry, &mut lfn_accum);
+                continue;
+            }
+            if (entry.attr & 0x08) != 0 {
+                lfn_accum.reset();
                 continue;
             }
 
-            let mut name_buf = [0u8; 12];
-            let name_len = format_filename(&entry.name, &mut name_buf);
-            if let Ok(name_str) = core::str::from_utf8(&name_buf[..name_len]) {
-                if name_str.eq_ignore_ascii_case(filename) {
-                    found = Some(FoundEntry {
-                        sector,
-                        index: i,
-                        entry: DirectoryEntry {
-                            name: entry.name,
-                            attr: entry.attr,
-                            nt_res: entry.nt_res,
-                            crt_time_tenth: entry.crt_time_tenth,
-                            crt_time: entry.crt_time,
-                            crt_date: entry.crt_date,
-                            lst_acc_date: entry.lst_acc_date,
-                            first_cluster_hi: entry.first_cluster_hi,
-                            wrt_time: entry.wrt_time,
-                            wrt_date: entry.wrt_date,
-                            first_cluster_lo: entry.first_cluster_lo,
-                            file_size: entry.file_size,
-                        },
-                    });
-                    return Ok(false);
+            let mut matched = false;
+            let mut lfn_buf = [0u8; 260];
+            if let Some(lfn_len) = get_lfn_utf8(&lfn_accum, &mut lfn_buf) {
+                if let Ok(lfn_str) = core::str::from_utf8(&lfn_buf[..lfn_len]) {
+                    if lfn_str.eq_ignore_ascii_case(filename) {
+                        matched = true;
+                    }
                 }
+            }
+
+            if !matched {
+                let mut name_buf = [0u8; 12];
+                let name_len = format_filename(&entry.name, &mut name_buf);
+                if let Ok(name_str) = core::str::from_utf8(&name_buf[..name_len]) {
+                    if name_str.eq_ignore_ascii_case(filename) {
+                        matched = true;
+                    }
+                }
+            }
+
+            lfn_accum.reset();
+
+            if matched {
+                found = Some(FoundEntry {
+                    sector,
+                    index: i,
+                    entry: DirectoryEntry {
+                        name: entry.name,
+                        attr: entry.attr,
+                        nt_res: entry.nt_res,
+                        crt_time_tenth: entry.crt_time_tenth,
+                        crt_time: entry.crt_time,
+                        crt_date: entry.crt_date,
+                        lst_acc_date: entry.lst_acc_date,
+                        first_cluster_hi: entry.first_cluster_hi,
+                        wrt_time: entry.wrt_time,
+                        wrt_date: entry.wrt_date,
+                        first_cluster_lo: entry.first_cluster_lo,
+                        file_size: entry.file_size,
+                    },
+                });
+                return Ok(false);
             }
         }
         Ok(true)

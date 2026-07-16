@@ -20,17 +20,13 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
 
         let mut file_buf = [0u8; 8192];
         let content: &[u8] = if let Some(file) = filename {
-            let read_res = crate::fs::fat::read_file_content(file, &mut file_buf);
-            match read_res {
+            match crate::fs::vfs::read_file(file, &mut file_buf) {
                 Ok(len) => &file_buf[..len],
-                Err(_) => match crate::fs::tar::read_file_content(file, &mut file_buf) {
-                    Ok(len) => &file_buf[..len],
-                    Err(e) => {
-                        vga::print_str("Error reading file: ");
-                        vga::print_str(e);
-                        vga::print_str("\n");
-                        return;
-                    }
+                Err(e) => {
+                    vga::print_str("Error reading file: ");
+                    vga::print_str(e);
+                    vga::print_str("\n");
+                    return;
                 }
             }
         } else if crate::io::vga::PIPE_ACTIVE {

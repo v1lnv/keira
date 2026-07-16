@@ -21,21 +21,20 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
                 return;
             }
         };
-        unsafe {
-            let file_exists_in_fat = if let Ok((dir_cluster, name)) = crate::fs::fat::resolve_path(arg) {
-                crate::fs::fat::find_entry(name, dir_cluster).is_ok()
-            } else {
-                false
-            };
-
-            if file_exists_in_fat {
-                crate::fs::fat::cat_file(arg);
-            } else {
-                if let Err(e) = crate::fs::tar::cat_file(arg) {
-                    vga::print_str("Error viewing file: ");
-                    vga::print_str(e);
+        let mut file_buf = [0u8; 8192];
+        match crate::fs::vfs::read_file(arg, &mut file_buf) {
+            Ok(len) => {
+                if let Ok(text) = core::str::from_utf8(&file_buf[..len]) {
+                    vga::print_str(text);
                     vga::print_str("\n");
+                } else {
+                    vga::print_str("Error: File contains invalid UTF-8 encoding\n");
                 }
+            }
+            Err(e) => {
+                vga::print_str("Error viewing file: ");
+                vga::print_str(e);
+                vga::print_str("\n");
             }
         }
     }

@@ -1,8 +1,8 @@
 //! Keira Kernel: FAT16 Directory Operations
 
 use super::cluster::{alloc_cluster, fat_next_cluster, free_cluster_chain};
-use super::path::{filename_to_8_3, find_entry, format_filename, resolve_path};
-use super::types::{DirectoryEntry, Fat16Volume};
+use super::path::{filename_to_8_3, find_entry, format_filename, resolve_path, accumulate_lfn, get_lfn_utf8};
+use super::types::{DirectoryEntry, Fat16Volume, LfnAccumulator};
 use super::volume::cluster_to_sector;
 use super::{read_sector, write_sector};
 use super::{CURRENT_DIR_CLUSTER, VOLUME};
@@ -265,9 +265,11 @@ pub unsafe fn list_files_in_dir(dir_cluster: u16, show_all: bool) -> Result<(), 
 
     let mut count = 0;
     let mut sector_data = [0u8; 512];
+    let mut lfn_accum = LfnAccumulator::new();
 
     let res = for_each_directory_sector(dir_cluster, |sector| {
         if read_sector(sector, &mut sector_data).is_err() {
+            lfn_accum.reset();
             return Err("Error reading sector");
         }
 
@@ -276,21 +278,35 @@ pub unsafe fn list_files_in_dir(dir_cluster: u16, show_all: bool) -> Result<(), 
             let entry = &*entries.add(i);
 
             if entry.name[0] == 0x00 {
+                lfn_accum.reset();
                 return Ok(false);
             }
             if entry.name[0] == 0xE5 {
+                lfn_accum.reset();
                 continue;
             }
             if (entry.attr & 0x0F) == 0x0F {
+                accumulate_lfn(entry, &mut lfn_accum);
                 continue;
             }
             if (entry.attr & 0x08) != 0 {
+                lfn_accum.reset();
                 continue;
             }
 
-            let mut name_buf = [0u8; 12];
-            let name_len = format_filename(&entry.name, &mut name_buf);
-            if let Ok(name_str) = core::str::from_utf8(&name_buf[..name_len]) {
+            let mut lfn_buf = [0u8; 260];
+            let name_len = if let Some(len) = get_lfn_utf8(&lfn_accum, &mut lfn_buf) {
+                len
+            } else {
+                let mut name83 = [0u8; 12];
+                let len = format_filename(&entry.name, &mut name83);
+                lfn_buf[..len].copy_from_slice(&name83[..len]);
+                len
+            };
+
+            lfn_accum.reset();
+
+            if let Ok(name_str) = core::str::from_utf8(&lfn_buf[..name_len]) {
                 if !show_all {
                     if name_str == "." || name_str == ".." {
                         continue;

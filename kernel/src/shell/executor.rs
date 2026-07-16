@@ -208,19 +208,15 @@ pub fn execute_command(cmd: &str) {
     if let Some(filename) = input_file {
         unsafe {
             let mut file_buf = [0u8; 4096];
-            let read_res = crate::fs::fat::read_file_content(filename, &mut file_buf);
-            let bytes_read = match read_res {
+            let bytes_read = match crate::fs::vfs::read_file(filename, &mut file_buf) {
                 Ok(len) => len,
-                Err(_) => match crate::fs::tar::read_file_content(filename, &mut file_buf) {
-                    Ok(len) => len,
-                    Err(e) => {
-                        vga::set_color(vga::Color::LightRed, vga::Color::Black);
-                        vga::print_str("Error reading input redirection file: ");
-                        vga::print_str(e);
-                        vga::print_str("\n");
-                        vga::set_color(vga::Color::LightGrey, vga::Color::Black);
-                        return;
-                    }
+                Err(e) => {
+                    vga::set_color(vga::Color::LightRed, vga::Color::Black);
+                    vga::print_str("Error reading input redirection file: ");
+                    vga::print_str(e);
+                    vga::print_str("\n");
+                    vga::set_color(vga::Color::LightGrey, vga::Color::Black);
+                    return;
                 }
             };
 

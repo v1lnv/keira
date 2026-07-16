@@ -25,6 +25,7 @@ pub unsafe fn init() {
         rsp: 0,
         stack_addr: 0,
         state: TaskState::Running,
+        fds: [super::types::FileDescriptor::new(); 8],
     };
     TASKS[0] = Some(main_task);
     CURRENT_TASK_IDX = 0;
@@ -81,6 +82,7 @@ pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'st
         rsp: context_ptr as u64,
         stack_addr: stack_frame,
         state: TaskState::Ready,
+        fds: [super::types::FileDescriptor::new(); 8],
     };
 
     TASKS[slot_idx] = Some(new_task);

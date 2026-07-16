@@ -39,7 +39,7 @@ unsafe fn editor_save_file() -> Result<(), &'static str> {
     let filename_str =
         core::str::from_utf8(filename_slice).map_err(|_| "Invalid filename encoding")?;
 
-    crate::fs::fat::write_file_content(filename_str, &flat_buf[..flat_len])?;
+    crate::fs::vfs::write_file(filename_str, &flat_buf[..flat_len])?;
     Ok(())
 }
 
@@ -59,7 +59,7 @@ pub unsafe fn editor_start(filename: &str) -> Result<(), &'static str> {
     SEARCH_BUFFER = [0; 16];
 
     let mut file_buf = [0u8; 2048];
-    match crate::fs::fat::read_file_content(filename, &mut file_buf) {
+    match crate::fs::vfs::read_file(filename, &mut file_buf) {
         Ok(bytes_read) => {
             let mut x = 0;
             let mut y = 0;

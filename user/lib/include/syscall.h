@@ -10,5 +10,10 @@ void sys_exit(void) __attribute__((noreturn));
 void sys_sleep(unsigned long ms);
 unsigned long sys_uptime(void);
 int sys_exec(const char *filename);
+int sys_open(const char *path, int write_mode);
+int sys_read(int fd, void *buf, int len);
+int sys_write(int fd, const void *buf, int len);
+int sys_close(int fd);
+int sys_seek(int fd, unsigned long offset);
 
 #endif // USER_SYSCALL_H

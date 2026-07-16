@@ -7,12 +7,40 @@ pub enum TaskState {
     Terminated,
 }
 
+#[derive(Clone, Copy)]
+pub struct FileDescriptor {
+    pub is_open: bool,
+    pub path: [u8; 128],
+    pub path_len: usize,
+    pub offset: u64,
+    pub write_mode: bool,
+}
+
+impl FileDescriptor {
+    pub const fn new() -> Self {
+        Self {
+            is_open: false,
+            path: [0u8; 128],
+            path_len: 0,
+            offset: 0,
+            write_mode: false,
+        }
+    }
+}
+
+impl Default for FileDescriptor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct Task {
     pub id: usize,
     pub name: &'static str,
     pub rsp: u64,
     pub stack_addr: u64, // Physical frame address for the stack
     pub state: TaskState,
+    pub fds: [FileDescriptor; 8],
 }
 
 #[repr(C, packed)]

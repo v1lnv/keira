@@ -4,6 +4,15 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-16
+
+### Added
+- Long File Names (LFN) support in FAT16 filesystem, reconstructing long UTF-8 names dynamically during directory traversal and path searches.
+- Unified Virtual File System (VFS) layer routing paths to FAT16 or Tar (Initrd) based on prefix, simplifying all file-handling shell commands.
+- Exposed file system system calls (`sys_open`, `sys_read`, `sys_write`, `sys_close`, `sys_seek`) to Ring 3.
+- Implemented file descriptor tables (FDT) for scheduler tasks.
+- Created end-to-end integration test in `init` user app to verify file read, write, seek, and close syscalls in Ring 3.
+
 ## [0.7.2] - 2026-07-15
 
 ### Changed

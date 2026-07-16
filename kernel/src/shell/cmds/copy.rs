@@ -3,7 +3,7 @@
 //! Implementation of the file copy command.
 
 use crate::io::vga;
-use crate::fs::fat::{read_file_content, create_file, write_file_content};
+use crate::fs::vfs;
 
 static mut COPY_BUFFER: [u8; 65536] = [0; 65536];
 
@@ -27,12 +27,12 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
     unsafe {
         let copy_buf = &mut *core::ptr::addr_of_mut!(COPY_BUFFER);
         // Read source file content into the static copy buffer
-        match read_file_content(src, copy_buf) {
+        match vfs::read_file(src, copy_buf) {
             Ok(size) => {
                 // Try to create the destination file (if it already exists, we will overwrite it)
-                let _ = create_file(dest);
+                let _ = vfs::create_file(dest);
 
-                match write_file_content(dest, &copy_buf[..size]) {
+                match vfs::write_file(dest, &copy_buf[..size]) {
                     Ok(_) => {
                         vga::print_str("File copied successfully.\n");
                     }

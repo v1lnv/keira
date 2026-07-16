@@ -31,3 +31,33 @@ int sys_exec(const char *filename) {
     __asm__ volatile("syscall" : "=a"(res) : "a"(5), "D"((unsigned long)filename) : "rcx", "r11", "memory");
     return (int)res;
 }
+
+int sys_open(const char *path, int write_mode) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(6), "D"((unsigned long)path), "S"((unsigned long)write_mode) : "rcx", "r11", "memory");
+    return (int)res;
+}
+
+int sys_read(int fd, void *buf, int len) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(7), "D"((unsigned long)fd), "S"((unsigned long)buf), "d"((unsigned long)len) : "rcx", "r11", "memory");
+    return (int)res;
+}
+
+int sys_write(int fd, const void *buf, int len) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(8), "D"((unsigned long)fd), "S"((unsigned long)buf), "d"((unsigned long)len) : "rcx", "r11", "memory");
+    return (int)res;
+}
+
+int sys_close(int fd) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(9), "D"((unsigned long)fd) : "rcx", "r11", "memory");
+    return (int)res;
+}
+
+int sys_seek(int fd, unsigned long offset) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(10), "D"((unsigned long)fd), "S"(offset) : "rcx", "r11", "memory");
+    return (int)res;
+}

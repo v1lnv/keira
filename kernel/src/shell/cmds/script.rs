@@ -24,10 +24,7 @@ pub fn run(parts: &mut core::str::SplitWhitespace) {
     };
     unsafe {
         let script_buf = &mut *core::ptr::addr_of_mut!(SCRIPT_BUFFER);
-        let read_res = match crate::fs::fat::read_file_content(arg, script_buf) {
-            Ok(len) => Ok(len),
-            Err(_) => crate::fs::tar::read_file_content(arg, script_buf),
-        };
+        let read_res = crate::fs::vfs::read_file(arg, script_buf);
         match read_res {
             Ok(len) => {
                 let content = &script_buf[..len];
