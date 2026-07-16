@@ -67,10 +67,24 @@ void _start(void) {
         printf("  Failed to allocate memory on heap.\n\n");
     }
 
-    // Process Crash Protection test (uncomment to trigger)
-    // printf("Testing Page Fault Exception Protection (accessing NULL pointer):\n");
-    // volatile int *invalid_ptr = (volatile int *)0;
-    // *invalid_ptr = 42;
+    // Process identity test
+    printf("Testing Process Identity:\n");
+    printf("  My PID: %d\n", sys_getpid());
+    char cwd[128];
+    memset(cwd, 0, sizeof(cwd));
+    int cwd_len = sys_getcwd(cwd, sizeof(cwd) - 1);
+    if (cwd_len > 0) {
+        printf("  Current Working Directory: %s\n\n", cwd);
+    }
+
+    // Child process spawn test
+    printf("Testing Process Spawn (launching hello.elf):\n");
+    int spawn_result = sys_spawn("/apps/bin/hello.elf");
+    if (spawn_result == 0) {
+        printf("  Child process completed successfully.\n\n");
+    } else {
+        printf("  Child process spawn failed or not found.\n\n");
+    }
 
     printf("Exiting User Mode and returning to Kernel shell.\n");
     sys_exit();

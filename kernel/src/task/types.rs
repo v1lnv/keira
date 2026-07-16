@@ -43,6 +43,9 @@ pub struct Task {
     pub fds: [FileDescriptor; 8],
     pub program_break: u64,
     pub program_break_start: u64,
+    pub cwd: [u8; 128],
+    pub cwd_len: usize,
+    pub parent_id: usize,
 }
 
 #[repr(C, packed)]

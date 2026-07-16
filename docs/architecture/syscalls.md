@@ -56,3 +56,8 @@ The kernel exposes the following system calls to Ring 3 applications:
 | **9** | `sys_close` | `int sys_close(int fd)` | Closes the file descriptor. Returns 0 on success, or -1 on error. |
 | **10** | `sys_seek` | `int sys_seek(int fd, unsigned long offset)` | Seeks to a specific offset pointer in the open file descriptor. Returns 0. |
 | **11** | `sys_sbrk` | `void *sys_sbrk(long increment)` | Dynamically expands or shrinks the program break pointer, allocating or freeing physical heap pages. Returns the previous program break address. |
+| **12** | `sys_spawn` | `int sys_spawn(const char *path)` | Loads and executes an ELF binary as a child process (synchronous). Returns 0 on success. |
+| **13** | `sys_waitpid` | `int sys_waitpid(int pid)` | Waits for a child process to complete. Returns 0 (synchronous spawn model). |
+| **14** | `sys_getpid` | `int sys_getpid(void)` | Returns the process ID (PID) of the calling process. |
+| **15** | `sys_getcwd` | `int sys_getcwd(char *buf, int len)` | Copies the current working directory path into `buf`. Returns the number of bytes written. |
+| **16** | `sys_chdir` | `int sys_chdir(const char *path)` | Changes the current working directory of the calling process. Returns 0 on success. |

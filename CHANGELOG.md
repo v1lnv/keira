@@ -4,6 +4,19 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-07-16
+
+### Added
+- Process lifecycle system calls: `sys_spawn`, `sys_waitpid`, `sys_getpid`, `sys_getcwd`, `sys_chdir`.
+- Per-process working directory (`cwd`) and parent tracking (`parent_id`) in task struct.
+- Second user-space application `hello.elf` demonstrating PID, CWD, and heap from a standalone process.
+- Multi-app build system in Makefile with shared `USER_LIB_SRCS` and `USER_CC_FLAGS`.
+- Process spawn demonstration in init: `sys_spawn("/apps/bin/hello.elf")` launches child process.
+- ELF segment page cleanup on program exit (prevents memory leaks from loaded segments).
+
+### Changed
+- Expanded ELF file buffer from 32KB to 64KB for larger binary support.
+
 ## [0.9.0] - 2026-07-16
 
 ### Added

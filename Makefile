@@ -146,17 +146,22 @@ help: ## Show this interactive help screen containing all available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 	@printf "\n"
 
-user: build/user_test.elf ## Build user space initialization program and library
+USER_LIB_SRCS := user/lib/syscall.c user/lib/string.c user/lib/stdio.c user/lib/malloc.c
+USER_CC_FLAGS  := -ffreestanding -nostdlib -fno-stack-protector -m64 -O2 -Iuser/lib -Iuser/lib/include -T user/linker.ld -Wl,--no-warn-rwx-segments -static -no-pie
 
-build/user_test.elf: user/apps/init/main.c user/lib/syscall.c user/lib/string.c user/lib/stdio.c user/lib/malloc.c user/linker.ld | dirs
-	@$(LOG_INFO) "Building user space program and library..."
-	@$(CC) -ffreestanding -nostdlib -fno-stack-protector -m64 -O2 -Iuser/lib -Iuser/lib/include -T user/linker.ld \
-	        user/apps/init/main.c user/lib/syscall.c user/lib/string.c user/lib/stdio.c user/lib/malloc.c \
-	        -o build/user_test.elf -Wl,--no-warn-rwx-segments -static -no-pie
+user: build/user_test.elf build/hello.elf ## Build user space programs and library
+
+build/user_test.elf: user/apps/init/main.c $(USER_LIB_SRCS) user/linker.ld | dirs
+	@$(LOG_INFO) "Building user space program: init (user_test.elf)..."
+	@$(CC) $(USER_CC_FLAGS) user/apps/init/main.c $(USER_LIB_SRCS) -o build/user_test.elf
+
+build/hello.elf: user/apps/hello/main.c $(USER_LIB_SRCS) user/linker.ld | dirs
+	@$(LOG_INFO) "Building user space program: hello (hello.elf)..."
+	@$(CC) $(USER_CC_FLAGS) user/apps/hello/main.c $(USER_LIB_SRCS) -o build/hello.elf
 
 disk: $(DISK_IMG) ## Force rebuild and populate FAT16 harddisk block image
 
-$(DISK_IMG): build/user_test.elf
+$(DISK_IMG): build/user_test.elf build/hello.elf
 	@rm -f $(DISK_IMG)
 	@$(LOG_DISK) "Creating 32MB FAT16 disk image..."
 	@dd if=/dev/zero of=$(DISK_IMG) bs=1M count=32 2>/dev/null
@@ -189,10 +194,11 @@ $(DISK_IMG): build/user_test.elf
 	@mcopy -o -i $(DISK_IMG) $(BUILD_DIR)/default.cfg ::/config/theme/default.cfg
 	@$(LOG_DISK) "Copying binaries and configuration files..."
 	@mcopy -o -i $(DISK_IMG) build/user_test.elf ::/apps/bin/user_test.elf
+	@mcopy -o -i $(DISK_IMG) build/hello.elf ::/apps/bin/hello.elf
 
 initrd: $(BUILD_DIR)/initrd.tar ## Force rebuild the RAM disk USTAR archive
 
-$(BUILD_DIR)/initrd.tar: build/user_test.elf
+$(BUILD_DIR)/initrd.tar: build/user_test.elf build/hello.elf
 	@$(LOG_INFO) "Building RAM Disk (Initrd)..."
 	@mkdir -p $(BUILD_DIR)/initrd_root/system/bin
 	@mkdir -p $(BUILD_DIR)/initrd_root/system/drivers
@@ -220,6 +226,7 @@ $(BUILD_DIR)/initrd.tar: build/user_test.elf
 	@echo "Keira PC Speaker Sound Subsystem Driver (PIT Channel 2)" > $(BUILD_DIR)/initrd_root/system/drivers/sound.sys
 	@echo "color_scheme=classic\nprompt_symbol=>\ncursor=block" > $(BUILD_DIR)/initrd_root/config/theme/default.cfg
 	@cp build/user_test.elf $(BUILD_DIR)/initrd_root/apps/bin/user_test.elf
+	@cp build/hello.elf $(BUILD_DIR)/initrd_root/apps/bin/hello.elf
 	@cd $(BUILD_DIR)/initrd_root && tar -cf ../initrd.tar *
 
 iso: $(KERNEL_ISO) ## Force rebuild and package bootable ISO release image

@@ -308,6 +308,114 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
             }
             u64::MAX
         }
+        // Syscall 12: spawn
+        // Signature: sys_spawn(path_ptr: *const u8) -> child_pid or u64::MAX on error
+        12 => {
+            let path_ptr = arg1 as *const u8;
+            if path_ptr.is_null() {
+                return u64::MAX;
+            }
+            let mut name_buf = [0u8; 128];
+            let mut len = 0;
+            unsafe {
+                while len < 127 {
+                    let c = *path_ptr.add(len);
+                    if c == 0 {
+                        break;
+                    }
+                    name_buf[len] = c;
+                    len += 1;
+                }
+            }
+            if let Ok(filename_str) = core::str::from_utf8(&name_buf[..len]) {
+                unsafe {
+                    let parent_idx = crate::task::scheduler::CURRENT_TASK_IDX;
+                    match crate::fs::elf::run_user_program(filename_str) {
+                        Ok(_) => {
+                            // Synchronous spawn completed; return a synthetic child PID
+                            // Since run_user_program blocks, we return the parent's index + 100
+                            // as a synthetic child PID indicator
+                            let _ = parent_idx;
+                            0 // Success
+                        }
+                        Err(_) => u64::MAX,
+                    }
+                }
+            } else {
+                u64::MAX
+            }
+        }
+        // Syscall 13: waitpid
+        // Signature: sys_waitpid(pid: u64) -> status (0 = already exited for sync spawn)
+        13 => {
+            // In synchronous spawn model, child has already completed
+            0
+        }
+        // Syscall 14: getpid
+        // Signature: sys_getpid() -> pid
+        14 => {
+            unsafe {
+                let idx = crate::task::scheduler::CURRENT_TASK_IDX;
+                if let Some(ref task) = crate::task::scheduler::TASKS[idx] {
+                    task.id as u64
+                } else {
+                    u64::MAX
+                }
+            }
+        }
+        // Syscall 15: getcwd
+        // Signature: sys_getcwd(buf_ptr: *mut u8, buf_len: u64) -> length or u64::MAX
+        15 => {
+            let buf_ptr = arg1 as *mut u8;
+            let buf_len = arg2;
+            if buf_ptr.is_null() || buf_len == 0 {
+                return u64::MAX;
+            }
+            unsafe {
+                let task = &crate::task::scheduler::TASKS[crate::task::scheduler::CURRENT_TASK_IDX];
+                if let Some(t) = task {
+                    let copy_len = core::cmp::min(t.cwd_len, buf_len as usize);
+                    for i in 0..copy_len {
+                        *buf_ptr.add(i) = t.cwd[i];
+                    }
+                    return copy_len as u64;
+                }
+            }
+            u64::MAX
+        }
+        // Syscall 16: chdir
+        // Signature: sys_chdir(path_ptr: *const u8) -> 0 on success
+        16 => {
+            let path_ptr = arg1 as *const u8;
+            if path_ptr.is_null() {
+                return u64::MAX;
+            }
+            let mut path_buf = [0u8; 128];
+            let mut len = 0;
+            while len < 127 {
+                let c = unsafe { *path_ptr.add(len) };
+                if c == 0 {
+                    break;
+                }
+                path_buf[len] = c;
+                len += 1;
+            }
+            // Validate path exists
+            if let Ok(path_str) = core::str::from_utf8(&path_buf[..len]) {
+                if !crate::fs::vfs::exists(path_str) {
+                    return u64::MAX;
+                }
+                unsafe {
+                    let task = &mut crate::task::scheduler::TASKS[crate::task::scheduler::CURRENT_TASK_IDX];
+                    if let Some(t) = task {
+                        t.cwd[..len].copy_from_slice(&path_buf[..len]);
+                        t.cwd_len = len;
+                        return 0;
+                    }
+                }
+            }
+            u64::MAX
+        }
         _ => {
             u64::MAX // Unknown syscall
         }

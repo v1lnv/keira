@@ -67,3 +67,33 @@ void *sys_sbrk(long increment) {
     __asm__ volatile("syscall" : "=a"(res) : "a"(11), "D"((unsigned long)increment) : "rcx", "r11", "memory");
     return (void *)res;
 }
+
+int sys_spawn(const char *path) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(12), "D"((unsigned long)path) : "rcx", "r11", "memory");
+    return (int)res;
+}
+
+int sys_waitpid(int pid) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(13), "D"((unsigned long)pid) : "rcx", "r11", "memory");
+    return (int)res;
+}
+
+int sys_getpid(void) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(14) : "rcx", "r11", "memory");
+    return (int)res;
+}
+
+int sys_getcwd(char *buf, int len) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(15), "D"((unsigned long)buf), "S"((unsigned long)len) : "rcx", "r11", "memory");
+    return (int)res;
+}
+
+int sys_chdir(const char *path) {
+    unsigned long res;
+    __asm__ volatile("syscall" : "=a"(res) : "a"(16), "D"((unsigned long)path) : "rcx", "r11", "memory");
+    return (int)res;
+}

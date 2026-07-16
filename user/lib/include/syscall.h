@@ -16,5 +16,10 @@ int sys_write(int fd, const void *buf, int len);
 int sys_close(int fd);
 int sys_seek(int fd, unsigned long offset);
 void *sys_sbrk(long increment);
+int sys_spawn(const char *path);
+int sys_waitpid(int pid);
+int sys_getpid(void);
+int sys_getcwd(char *buf, int len);
+int sys_chdir(const char *path);
 
 #endif // USER_SYSCALL_H

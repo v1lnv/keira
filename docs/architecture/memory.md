@@ -69,3 +69,13 @@ Keira v0.9.0 introduces dynamic user-space heap allocation:
   - Automatically unmaps and reclaims physical page frames on shrinking.
 - **User-Space Allocator (`malloc` & `free`)**: Built as an implicit free-list memory manager inside `libkeira`, providing aligned, split-block, and coalesced block mappings on top of `sys_sbrk`.
 - **Automatic Heap Cleanup**: When a user process exits, the loader iterates from `0x600000000000` up to `program_break`, calling `vmm::free_and_unmap_page` to release all allocated physical frames and clear the page table mappings to prevent memory leaks.
+
+---
+
+## 5. ELF Loader Memory Management
+
+Keira v0.10.0 introduces full memory lifecycle management for loaded ELF binaries:
+- **Expanded File Buffer**: The ELF file read buffer has been increased from 32KB to **64KB** to accommodate larger user-space binaries (preparation for porting compilers and complex applications).
+- **Segment Page Cleanup**: When a user program exits, the loader iterates all `PT_LOAD` program headers from the ELF and unmaps + frees each mapped physical page. This prevents memory leaks from accumulated text/data/BSS segments across multiple program executions.
+- **Stack Page Cleanup**: The user stack page at `0x7FFFFFFF0000` is explicitly unmapped and its physical frame freed on program exit.
+- **Complete Teardown Order**: On process exit, cleanup proceeds in order: (1) Heap pages, (2) ELF segment pages, (3) Stack page.

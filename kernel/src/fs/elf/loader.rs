@@ -3,7 +3,7 @@
 use super::types::{ElfHeader, ProgramHeader, PT_LOAD};
 use crate::mem::{pmm, vmm};
 
-static mut ELF_FILE_BUF: [u8; 32768] = [0u8; 32768];
+static mut ELF_FILE_BUF: [u8; 65536] = [0u8; 65536];
 
 /// Load an ELF binary from Routed VFS disk, map pages, and return virtual entry address
 pub unsafe fn load_elf(filename: &str) -> Result<u64, &'static str> {
@@ -150,7 +150,30 @@ pub unsafe fn run_user_program(filename: &str) -> Result<(), &'static str> {
         addr += pmm::PAGE_SIZE;
     }
 
-    // 5. Clean up the stack frame after program exits back to kernel
+    // 5. Clean up ELF segment pages
+    let file_buf = &*core::ptr::addr_of!(ELF_FILE_BUF);
+    let header = &*(file_buf.as_ptr() as *const super::types::ElfHeader);
+    let ph_size = core::mem::size_of::<super::types::ProgramHeader>();
+    for i in 0..header.phnum {
+        let offset = header.phoff + (i as u64 * header.phentsize as u64);
+        if offset + ph_size as u64 > file_buf.len() as u64 {
+            break;
+        }
+        let ph = &*(file_buf.as_ptr().add(offset as usize) as *const super::types::ProgramHeader);
+        if ph.p_type == super::types::PT_LOAD {
+            let page_offset = ph.p_vaddr % pmm::PAGE_SIZE;
+            let aligned_start = ph.p_vaddr - page_offset;
+            let total_size = ph.p_memsz + page_offset;
+            let mut seg_offset = 0u64;
+            while seg_offset < total_size {
+                let _ = vmm::free_and_unmap_page(aligned_start + seg_offset);
+                seg_offset += pmm::PAGE_SIZE;
+            }
+        }
+    }
+
+    // 6. Clean up the user stack frame
+    let _ = vmm::unmap_page(user_stack_vaddr);
     pmm::free_frame(stack_frame);
 
     Ok(())

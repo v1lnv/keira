@@ -19,6 +19,8 @@ pub static mut SCHEDULER_INITIALIZED: bool = false;
 /// This function modifies global mutable state `TASKS` and `CURRENT_TASK_IDX`.
 /// Must be called only once during early initialization.
 pub unsafe fn init() {
+    let mut main_cwd = [0u8; 128];
+    main_cwd[0] = b'/';
     let main_task = Task {
         id: 0,
         name: "kernel_shell",
@@ -28,6 +30,9 @@ pub unsafe fn init() {
         fds: [super::types::FileDescriptor::new(); 8],
         program_break: 0,
         program_break_start: 0,
+        cwd: main_cwd,
+        cwd_len: 1,
+        parent_id: 0,
     };
     TASKS[0] = Some(main_task);
     CURRENT_TASK_IDX = 0;
@@ -78,6 +83,14 @@ pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'st
     (*context_ptr).rsp = stack_top;
     (*context_ptr).ss = 0x10;
 
+    let mut child_cwd = [0u8; 128];
+    child_cwd[0] = b'/';
+    let mut parent_cwd_len = 1usize;
+    let parent_id = CURRENT_TASK_IDX;
+    if let Some(ref parent) = TASKS[parent_id] {
+        child_cwd[..parent.cwd_len].copy_from_slice(&parent.cwd[..parent.cwd_len]);
+        parent_cwd_len = parent.cwd_len;
+    }
     let new_task = Task {
         id: slot_idx,
         name,
@@ -87,6 +100,9 @@ pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'st
         fds: [super::types::FileDescriptor::new(); 8],
         program_break: 0,
         program_break_start: 0,
+        cwd: child_cwd,
+        cwd_len: parent_cwd_len,
+        parent_id,
     };
 
     TASKS[slot_idx] = Some(new_task);
