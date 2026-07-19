@@ -75,7 +75,14 @@ Keira v0.9.0 introduces dynamic user-space heap allocation:
 ## 5. ELF Loader Memory Management
 
 Keira v0.10.0 introduces full memory lifecycle management for loaded ELF binaries:
-- **Expanded File Buffer**: The ELF file read buffer has been increased from 32KB to **64KB** to accommodate larger user-space binaries (preparation for porting compilers and complex applications).
-- **Segment Page Cleanup**: When a user program exits, the loader iterates all `PT_LOAD` program headers from the ELF and unmaps + frees each mapped physical page. This prevents memory leaks from accumulated text/data/BSS segments across multiple program executions.
-- **Stack Page Cleanup**: The user stack page at `0x7FFFFFFF0000` is explicitly unmapped and its physical frame freed on program exit.
-- **Complete Teardown Order**: On process exit, cleanup proceeds in order: (1) Heap pages, (2) ELF segment pages, (3) Stack page.
+- **Expanded File Buffer**: The ELF file read buffer has been increased from 32KB to **64KB** to accommodate larger user-space binaries.
+- **Address Space Isolation**: In Keira v0.13.0, the manual save and restore of parent mappings during loading has been removed. The ELF loader instead maps program segments and user stack directly into a new cloned address space.
+
+---
+
+## 6. Per-Process Address Spaces (v0.13.0)
+
+Keira v0.13.0 implements true memory isolation between processes using per-process Page Map Level 4 (PML4) tables:
+- **PML4 Cloning**: Each user task gets its own PML4 table via `clone_kernel_pml4`. The new PML4 shares only `PDPT[0]` (the kernel's 1GB identity map) from the boot PML4, while all user-space entries remain completely isolated.
+- **CR3 Switching**: The scheduler updates the active page directory by writing the physical address of the task's PML4 to the `CR3` register during context switch.
+- **Automatic Cleanup**: When a user process terminates, `vmm::free_user_pages` recursively traverses its PML4 table to free all mapped physical frames (code, data, heap, and stack) and intermediate page table structures (PDPT, PD, PT), eliminating memory leaks.

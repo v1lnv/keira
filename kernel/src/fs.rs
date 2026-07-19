@@ -5,5 +5,6 @@
 
 pub mod elf;
 pub mod fat;
+pub mod lock;
 pub mod tar;
 pub mod vfs;

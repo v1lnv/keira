@@ -60,6 +60,7 @@ syscall_handler_asm:
     mov rsp, [rel kernel_stack_temp]
     
     ; 3. Push context registers onto the kernel stack
+    push qword [rel user_rsp_temp]      ; Save user RSP on stack
     push r11                            ; Save user RFLAGS
     push rcx                            ; Save user RIP
     push rbp
@@ -104,6 +105,7 @@ syscall_handler_asm:
     pop rbp
     pop rcx                             ; Restore user RIP
     pop r11                             ; Restore user RFLAGS
+    pop qword [rel user_rsp_temp]       ; Restore user RSP from stack
     
     ; 6. Restore the user stack pointer
     mov rsp, [rel user_rsp_temp]

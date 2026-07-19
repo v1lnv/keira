@@ -7,6 +7,10 @@ use crate::io::serial;
 use crate::io::vga;
 use crate::mem::pmm;
 
+extern "C" {
+    static mut kernel_stack_temp: u64;
+}
+
 pub const MAX_TASKS: usize = 8;
 
 pub static mut TASKS: [Option<Task>; MAX_TASKS] = [None, None, None, None, None, None, None, None];
@@ -21,6 +25,7 @@ pub static mut SCHEDULER_INITIALIZED: bool = false;
 pub unsafe fn init() {
     let mut main_cwd = [0u8; 128];
     main_cwd[0] = b'/';
+    let boot_pml4 = crate::mem::vmm::active_pml4();
     let main_task = Task {
         id: 0,
         name: "kernel_shell",
@@ -33,6 +38,7 @@ pub unsafe fn init() {
         cwd: main_cwd,
         cwd_len: 1,
         parent_id: 0,
+        pml4_phys: boot_pml4,
     };
     TASKS[0] = Some(main_task);
     CURRENT_TASK_IDX = 0;
@@ -86,10 +92,12 @@ pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'st
     let mut child_cwd = [0u8; 128];
     child_cwd[0] = b'/';
     let mut parent_cwd_len = 1usize;
+    let mut parent_pml4 = crate::mem::vmm::active_pml4();
     let parent_id = CURRENT_TASK_IDX;
     if let Some(ref parent) = TASKS[parent_id] {
         child_cwd[..parent.cwd_len].copy_from_slice(&parent.cwd[..parent.cwd_len]);
         parent_cwd_len = parent.cwd_len;
+        parent_pml4 = parent.pml4_phys;
     }
     let new_task = Task {
         id: slot_idx,
@@ -103,6 +111,7 @@ pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'st
         cwd: child_cwd,
         cwd_len: parent_cwd_len,
         parent_id,
+        pml4_phys: parent_pml4,
     };
 
     TASKS[slot_idx] = Some(new_task);
@@ -115,6 +124,92 @@ pub unsafe fn spawn(name: &'static str, entry_point: fn()) -> Result<usize, &'st
 
     Ok(slot_idx)
 }
+
+/// Spawn a new user-space Ring 3 task
+///
+/// # Safety
+/// Allocates physical stack frame and setups privilege-transition context on the task's kernel stack.
+pub unsafe fn spawn_user(
+    name: &'static str,
+    entry_point: u64,
+    user_rsp: u64,
+    pml4_phys: u64,
+) -> Result<usize, &'static str> {
+    let mut slot = None;
+    for i in 0..MAX_TASKS {
+        if TASKS[i].is_none() {
+            slot = Some(i);
+            break;
+        }
+    }
+
+    let slot_idx = slot.ok_or("Scheduler: Maximum task limit reached")?;
+
+    let stack_frame = pmm::alloc_frame().ok_or("Scheduler: Out of memory for task stack")?;
+    let stack_top = stack_frame + pmm::PAGE_SIZE;
+
+    let context_ptr =
+        (stack_top - core::mem::size_of::<InterruptContext>() as u64) as *mut InterruptContext;
+
+    // Zero out registers
+    (*context_ptr).r15 = 0;
+    (*context_ptr).r14 = 0;
+    (*context_ptr).r13 = 0;
+    (*context_ptr).r12 = 0;
+    (*context_ptr).r11 = 0;
+    (*context_ptr).r10 = 0;
+    (*context_ptr).r9 = 0;
+    (*context_ptr).r8 = 0;
+    (*context_ptr).rdi = 0;
+    (*context_ptr).rsi = 0;
+    (*context_ptr).rbp = 0;
+    (*context_ptr).rbx = 0;
+    (*context_ptr).rdx = 0;
+    (*context_ptr).rcx = 0;
+    (*context_ptr).rax = 0;
+
+    // Set up user mode execution context for iretq
+    (*context_ptr).rip = entry_point;
+    (*context_ptr).cs = 0x2B;     // User Code Segment (0x28 | 3)
+    (*context_ptr).rflags = 0x202; // IF enabled
+    (*context_ptr).rsp = user_rsp; // User stack pointer
+    (*context_ptr).ss = 0x23;     // User Data Segment (0x20 | 3)
+
+    let mut child_cwd = [0u8; 128];
+    child_cwd[0] = b'/';
+    let mut parent_cwd_len = 1usize;
+    let parent_id = CURRENT_TASK_IDX;
+    if let Some(ref parent) = TASKS[parent_id] {
+        child_cwd[..parent.cwd_len].copy_from_slice(&parent.cwd[..parent.cwd_len]);
+        parent_cwd_len = parent.cwd_len;
+    }
+
+    let new_task = Task {
+        id: slot_idx,
+        name,
+        rsp: context_ptr as u64,
+        stack_addr: stack_frame,
+        state: TaskState::Ready,
+        fds: [super::types::FileDescriptor::new(); 8],
+        program_break: 0x600000000000,
+        program_break_start: 0x600000000000,
+        cwd: child_cwd,
+        cwd_len: parent_cwd_len,
+        parent_id,
+        pml4_phys,
+    };
+
+    TASKS[slot_idx] = Some(new_task);
+
+    serial::print_str("Scheduler: Spawned user task '");
+    serial::print_str(name);
+    serial::print_str("' in slot ");
+    print_decimal(slot_idx as u64);
+    serial::print_str("\n");
+
+    Ok(slot_idx)
+}
+
 
 /// Terminate the currently running task
 ///
@@ -141,6 +236,29 @@ pub unsafe fn exit_current() {
     }
 }
 
+/// Wait for a child task to terminate (non-blocking yield)
+pub unsafe fn wait_for_task(child_id: usize) {
+    let current_id = CURRENT_TASK_IDX;
+    
+    // Set the current task's state to WaitChild
+    if let Some(ref mut task) = TASKS[current_id] {
+        task.state = TaskState::WaitChild(child_id);
+    }
+
+    // Trigger context switch immediately by calling yield or PIT tick
+    // We can trigger it by issuing an interrupt or calling a yield helper.
+    // In our PIT-based preemptive setup, we can disable interrupts, force
+    // schedule_tick, or just loop/halt. But since we are in kernel mode
+    // calling a blocking function, we can disable interrupts, find next task,
+    // and manually switch stacks.
+    // Or simpler: just do a yield via PIT tick by calling schedule_tick manually
+    // or triggering software interrupt.
+    // Let's write a simple yield handler or just call schedule_tick directly!
+    // Since schedule_tick takes a stack pointer, we can just call it via assembly or inline.
+    // Wait, let's trigger a context switch using a software interrupt or a manual switch:
+    core::arch::asm!("int 32"); // Trigger PIT timer interrupt stub to yield immediately
+}
+
 /// Preemptive scheduler tick called from PIT timer interrupt
 ///
 /// # Safety
@@ -154,9 +272,21 @@ pub unsafe extern "C" fn schedule_tick(current_rsp: u64) -> u64 {
         return current_rsp;
     }
 
+    // 1. Scan and wake up any WaitChild tasks whose target children have exited
+    for i in 0..MAX_TASKS {
+        if let Some(ref mut task) = TASKS[i] {
+            if let TaskState::WaitChild(child_id) = task.state {
+                let child_exited = child_id >= MAX_TASKS || TASKS[child_id].is_none();
+                if child_exited {
+                    task.state = TaskState::Ready;
+                }
+            }
+        }
+    }
+
     let current_idx = CURRENT_TASK_IDX;
     
-    // Check if the current task was terminated
+    // 2. Check if the current task was terminated or blocked
     let mut current_terminated = false;
     if let Some(ref mut task) = TASKS[current_idx] {
         if task.state == TaskState::Terminated {
@@ -164,9 +294,12 @@ pub unsafe extern "C" fn schedule_tick(current_rsp: u64) -> u64 {
         } else if task.state == TaskState::Running {
             task.rsp = current_rsp;
             task.state = TaskState::Ready;
+        } else if let TaskState::WaitChild(_) = task.state {
+            task.rsp = current_rsp;
         }
     }
 
+    // 3. Find the next Ready task
     let mut next_idx = current_idx;
     loop {
         next_idx = (next_idx + 1) % MAX_TASKS;
@@ -175,12 +308,23 @@ pub unsafe extern "C" fn schedule_tick(current_rsp: u64) -> u64 {
                 task.state = TaskState::Running;
                 CURRENT_TASK_IDX = next_idx;
                 
-                // Safe deallocation: free the stack of the terminated task *after* switching away
+                // Safe deallocation: free the stack and address space of the terminated task *after* switching away
                 if current_terminated {
                     if let Some(ref prev_task) = TASKS[current_idx] {
-                        pmm::free_frame(prev_task.stack_addr);
+                        crate::fs::lock::release_all_locks_for_task(prev_task.id);
+                        if prev_task.stack_addr != 0 {
+                            crate::mem::vmm::free_user_pages(prev_task.pml4_phys, prev_task.program_break);
+                            pmm::free_frame(prev_task.stack_addr);
+                        }
                     }
                     TASKS[current_idx] = None;
+                }
+                
+                // Switch PML4 and update kernel stacks for user-space privilege transitions
+                crate::mem::vmm::switch_address_space(task.pml4_phys);
+                if task.stack_addr != 0 {
+                    crate::syscall::tss::TSS.rsp0 = task.stack_addr + crate::mem::pmm::PAGE_SIZE;
+                    kernel_stack_temp = task.stack_addr + crate::mem::pmm::PAGE_SIZE;
                 }
                 
                 return task.rsp;
@@ -191,24 +335,42 @@ pub unsafe extern "C" fn schedule_tick(current_rsp: u64) -> u64 {
         }
     }
 
-    // Fallback to kernel shell if the current task exited and no other task is ready
-    if current_terminated {
-        if let Some(ref mut main_task) = TASKS[0] {
-            main_task.state = TaskState::Running;
-            CURRENT_TASK_IDX = 0;
-            
-            if let Some(ref prev_task) = TASKS[current_idx] {
-                pmm::free_frame(prev_task.stack_addr);
-            }
-            if current_idx != 0 {
-                TASKS[current_idx] = None;
-            }
-            return main_task.rsp;
+    // 4. Fallback if no other task is Ready:
+    let mut current_runnable = false;
+    if let Some(ref task) = TASKS[current_idx] {
+        if task.state == TaskState::Running || task.state == TaskState::Ready {
+            current_runnable = true;
         }
     }
 
-    if let Some(ref mut task) = TASKS[current_idx] {
-        task.state = TaskState::Running;
+    if current_runnable && !current_terminated {
+        if let Some(ref mut task) = TASKS[current_idx] {
+            task.state = TaskState::Running;
+        }
+        return current_rsp;
+    }
+
+    // Fallback to kernel shell (Task 0)
+    if let Some(ref mut main_task) = TASKS[0] {
+        if current_idx != 0 {
+            main_task.state = TaskState::Running;
+            CURRENT_TASK_IDX = 0;
+            
+            if current_terminated {
+                if let Some(ref prev_task) = TASKS[current_idx] {
+                    crate::fs::lock::release_all_locks_for_task(prev_task.id);
+                    if prev_task.stack_addr != 0 {
+                        crate::mem::vmm::free_user_pages(prev_task.pml4_phys, prev_task.program_break);
+                        pmm::free_frame(prev_task.stack_addr);
+                    }
+                }
+                TASKS[current_idx] = None;
+            }
+            
+            crate::mem::vmm::switch_address_space(main_task.pml4_phys);
+            // Since main_task.stack_addr is 0, we don't update TSS/kernel_stack_temp
+            return main_task.rsp;
+        }
     }
 
     current_rsp
@@ -259,6 +421,10 @@ pub unsafe fn list_tasks() {
                 TaskState::Terminated => {
                     vga::set_color(vga::Color::Red, vga::Color::Black);
                     vga::print_str("TERMINATED\n");
+                }
+                TaskState::WaitChild(_) => {
+                    vga::set_color(vga::Color::Magenta, vga::Color::Black);
+                    vga::print_str("WAITING\n");
                 }
             }
             vga::set_color(vga::Color::White, vga::Color::Black);

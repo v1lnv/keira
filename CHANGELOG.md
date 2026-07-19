@@ -4,6 +4,19 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-07-19
+
+### Added
+- Isolated per-process address spaces: implemented PML4 cloning (`clone_kernel_pml4`) and CR3 switching on context switch, isolating user tasks from each other.
+- Preemptive multitasking scheduler: modified PIT timer interrupt (`isr32`) to manage task switching with full privilege-transition support via TSS `rsp0` updates.
+- Synchronous child task waiting (`sys_waitpid`, Syscall 13) and non-blocking scheduling state `WaitChild`.
+- Asynchronous task spawning (`sys_spawn`, Syscall 12) via `spawn_user_program`.
+- VFS file locking table (`kernel/src/fs/lock.rs`) to prevent write conflicts across processes, with automatic lock release on task exit.
+- Enhanced Keira C Compiler (`kcc`) supporting `if/else`, `while`, local variables, comparison operators (`<`, `>`, `==`, `!=`), and arithmetic expressions (`+`, `-`, `*`, `/`).
+
+### Refactored
+- Cleaned up ELF loader: removed manual code/data/stack/heap save and restore routines, delegating complete address space isolation to virtual memory management.
+
 ## [0.12.0] - 2026-07-19
 
 ### Added

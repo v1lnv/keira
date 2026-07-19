@@ -46,18 +46,18 @@ The kernel exposes the following system calls to Ring 3 applications:
 | ID | Name | Signature | Description |
 |---|---|---|---|
 | **1** | `sys_print_char` | `void sys_print_char(char c)` | Prints a single character to the screen buffer. |
-| **2** | `sys_exit` | `void sys_exit(void)` | Exits the user program context and jumps back to Ring 0 kernel shell. |
+| **2** | `sys_exit` | `void sys_exit(void)` | Exits the user program context, terminating the task and releasing all held resources/locks. |
 | **3** | `sys_sleep` | `void sys_sleep(unsigned long ms)` | Pauses user thread execution for a duration in milliseconds. |
 | **4** | `sys_uptime` | `unsigned long sys_uptime(void)` | Returns system uptime since boot in milliseconds. |
-| **5** | `sys_exec` | `int sys_exec(const char *filename)` | Loads a dynamic ELF executable from disk and executes it. |
+| **5** | `sys_exec` | `int sys_exec(const char *filename)` | Loads a dynamic ELF executable from disk and executes it (blocks current task). |
 | **6** | `sys_open` | `int sys_open(const char *path, int write_mode)` | Opens a file at the given path. Returns fd index or -1 on error. |
 | **7** | `sys_read` | `int sys_read(int fd, void *buf, int len)` | Reads up to `len` bytes from the open file descriptor into `buf`. Returns bytes read. |
 | **8** | `sys_write` | `int sys_write(int fd, const void *buf, int len)` | Writes up to `len` bytes from `buf` into the open file descriptor. Returns bytes written. |
 | **9** | `sys_close` | `int sys_close(int fd)` | Closes the file descriptor. Returns 0 on success, or -1 on error. |
 | **10** | `sys_seek` | `int sys_seek(int fd, unsigned long offset)` | Seeks to a specific offset pointer in the open file descriptor. Returns 0. |
 | **11** | `sys_sbrk` | `void *sys_sbrk(long increment)` | Dynamically expands or shrinks the program break pointer, allocating or freeing physical heap pages. Returns the previous program break address. |
-| **12** | `sys_spawn` | `int sys_spawn(const char *path)` | Loads and executes an ELF binary as a child process (synchronous). Returns 0 on success. |
-| **13** | `sys_waitpid` | `int sys_waitpid(int pid)` | Waits for a child process to complete. Returns 0 (synchronous spawn model). |
+| **12** | `sys_spawn` | `int sys_spawn(const char *path)` | Spawns and executes an ELF binary asynchronously as a separate scheduler task. Returns the child PID. |
+| **13** | `sys_waitpid` | `int sys_waitpid(int pid)` | Blocks the calling process until the child process with PID `pid` has exited. |
 | **14** | `sys_getpid` | `int sys_getpid(void)` | Returns the process ID (PID) of the calling process. |
 | **15** | `sys_getcwd` | `int sys_getcwd(char *buf, int len)` | Copies the current working directory path into `buf`. Returns the number of bytes written. |
 | **16** | `sys_chdir` | `int sys_chdir(const char *path)` | Changes the current working directory of the calling process. Returns 0 on success. |

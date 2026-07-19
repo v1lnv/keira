@@ -3,6 +3,7 @@
  *
  * A minimal single-pass compiler that compiles a subset of C into standalone
  * executable x86_64 ELF64 binaries directly on Keira.
+ * Supports variables, basic arithmetic, comparisons, while loops, if-else, and printf.
  */
 
 #include "../../lib/include/stdio.h"
@@ -57,7 +58,21 @@ typedef enum {
     TOK_RPAREN,
     TOK_LBRACE,
     TOK_RBRACE,
-    TOK_SEMICOLON
+    TOK_SEMICOLON,
+    // New tokens
+    TOK_IF,
+    TOK_ELSE,
+    TOK_WHILE,
+    TOK_ASSIGN,
+    TOK_PLUS,
+    TOK_MINUS,
+    TOK_STAR,
+    TOK_SLASH,
+    TOK_LT,
+    TOK_GT,
+    TOK_EQ,
+    TOK_NEQ,
+    TOK_COMMA
 } TokenType;
 
 static const char *src_ptr = NULL;
@@ -100,6 +115,9 @@ static TokenType next_token(void) {
         if (strcmp(token_string, "main") == 0) return TOK_MAIN;
         if (strcmp(token_string, "printf") == 0) return TOK_PRINTF;
         if (strcmp(token_string, "return") == 0) return TOK_RETURN;
+        if (strcmp(token_string, "if") == 0) return TOK_IF;
+        if (strcmp(token_string, "else") == 0) return TOK_ELSE;
+        if (strcmp(token_string, "while") == 0) return TOK_WHILE;
         return TOK_IDENT;
     }
 
@@ -138,16 +156,387 @@ static TokenType next_token(void) {
     if (c == '{') return TOK_LBRACE;
     if (c == '}') return TOK_RBRACE;
     if (c == ';') return TOK_SEMICOLON;
+    if (c == ',') return TOK_COMMA;
+    if (c == '+') return TOK_PLUS;
+    if (c == '-') return TOK_MINUS;
+    if (c == '*') return TOK_STAR;
+    if (c == '/') return TOK_SLASH;
+    if (c == '<') return TOK_LT;
+    if (c == '>') return TOK_GT;
+    if (c == '=') {
+        if (*src_ptr == '=') {
+            src_ptr++;
+            return TOK_EQ;
+        }
+        return TOK_ASSIGN;
+    }
+    if (c == '!') {
+        if (*src_ptr == '=') {
+            src_ptr++;
+            return TOK_NEQ;
+        }
+    }
 
     return TOK_EOF;
 }
 
+// Compiler state & Symbol table
+typedef struct {
+    char name[32];
+    int offset;
+} Symbol;
+
+static Symbol symbol_table[32];
+static int symbol_count = 0;
+
+static int lookup_symbol(const char *name) {
+    for (int i = 0; i < symbol_count; i++) {
+        if (strcmp(symbol_table[i].name, name) == 0) {
+            return symbol_table[i].offset;
+        }
+    }
+    return 0;
+}
+
+static int add_symbol(const char *name) {
+    int offset = lookup_symbol(name);
+    if (offset != 0) return offset;
+    
+    symbol_count++;
+    Symbol *sym = &symbol_table[symbol_count - 1];
+    strcpy(sym->name, name);
+    sym->offset = -4 * symbol_count;
+    return sym->offset;
+}
+
+static TokenType tok;
+
+static void match(TokenType expected) {
+    if (tok == expected) {
+        tok = next_token();
+    } else {
+        printf("Error: Expected token %d, got %d\n", expected, tok);
+        sys_exit();
+    }
+}
+
+// Expression parser & code generator
+static void expression(unsigned char *code_buf, int *code_idx);
+
+static void primary_expr(unsigned char *code_buf, int *code_idx) {
+    if (tok == TOK_NUM) {
+        // mov eax, token_num -> b8 [4 bytes]
+        code_buf[(*code_idx)++] = 0xb8;
+        unsigned int val = (unsigned int)token_num;
+        memcpy(code_buf + *code_idx, &val, 4);
+        *code_idx += 4;
+        match(TOK_NUM);
+    } else if (tok == TOK_IDENT) {
+        int offset = lookup_symbol(token_string);
+        if (offset == 0) {
+            printf("Error: Undefined variable %s\n", token_string);
+            sys_exit();
+        }
+        // mov eax, [rbp + offset] -> 8b 45 [1 byte offset]
+        code_buf[(*code_idx)++] = 0x8b;
+        code_buf[(*code_idx)++] = 0x45;
+        code_buf[(*code_idx)++] = (unsigned char)offset;
+        match(TOK_IDENT);
+    } else if (tok == TOK_LPAREN) {
+        match(TOK_LPAREN);
+        expression(code_buf, code_idx);
+        match(TOK_RPAREN);
+    } else {
+        printf("Error: Invalid primary expression, got token %d\n", tok);
+        sys_exit();
+    }
+}
+
+static void mul_expr(unsigned char *code_buf, int *code_idx) {
+    primary_expr(code_buf, code_idx);
+    while (tok == TOK_STAR || tok == TOK_SLASH) {
+        TokenType op = tok;
+        match(op);
+        // push rax -> 50
+        code_buf[(*code_idx)++] = 0x50;
+        primary_expr(code_buf, code_idx);
+        // pop rcx -> 59
+        code_buf[(*code_idx)++] = 0x59;
+        
+        if (op == TOK_STAR) {
+            // imul eax, ecx -> 0f af c1
+            code_buf[(*code_idx)++] = 0x0f;
+            code_buf[(*code_idx)++] = 0xaf;
+            code_buf[(*code_idx)++] = 0xc1;
+        } else {
+            // xchg eax, ecx -> 91
+            code_buf[(*code_idx)++] = 0x91;
+            // cdq -> 99
+            code_buf[(*code_idx)++] = 0x99;
+            // idiv ecx -> f7 f9
+            code_buf[(*code_idx)++] = 0xf7;
+            code_buf[(*code_idx)++] = 0xf9;
+        }
+    }
+}
+
+static void add_expr(unsigned char *code_buf, int *code_idx) {
+    mul_expr(code_buf, code_idx);
+    while (tok == TOK_PLUS || tok == TOK_MINUS) {
+        TokenType op = tok;
+        match(op);
+        // push rax -> 50
+        code_buf[(*code_idx)++] = 0x50;
+        mul_expr(code_buf, code_idx);
+        // pop rcx -> 59
+        code_buf[(*code_idx)++] = 0x59;
+        
+        if (op == TOK_PLUS) {
+            // add eax, ecx -> 03 c1
+            code_buf[(*code_idx)++] = 0x03;
+            code_buf[(*code_idx)++] = 0xc1;
+        } else {
+            // xchg eax, ecx -> 91
+            code_buf[(*code_idx)++] = 0x91;
+            // sub eax, ecx -> 2b c1
+            code_buf[(*code_idx)++] = 0x2b;
+            code_buf[(*code_idx)++] = 0xc1;
+        }
+    }
+}
+
+static void expression(unsigned char *code_buf, int *code_idx) {
+    add_expr(code_buf, code_idx);
+    while (tok == TOK_LT || tok == TOK_GT || tok == TOK_EQ || tok == TOK_NEQ) {
+        TokenType op = tok;
+        match(op);
+        // push rax -> 50
+        code_buf[(*code_idx)++] = 0x50;
+        add_expr(code_buf, code_idx);
+        // pop rcx -> 59
+        code_buf[(*code_idx)++] = 0x59;
+        
+        // cmp ecx, eax -> 39 c1
+        code_buf[(*code_idx)++] = 0x39;
+        code_buf[(*code_idx)++] = 0xc1;
+        
+        if (op == TOK_LT) {
+            // setl al -> 0f 9c c0
+            code_buf[(*code_idx)++] = 0x0f;
+            code_buf[(*code_idx)++] = 0x9c;
+            code_buf[(*code_idx)++] = 0xc0;
+        } else if (op == TOK_GT) {
+            // setg al -> 0f 9f c0
+            code_buf[(*code_idx)++] = 0x0f;
+            code_buf[(*code_idx)++] = 0x9f;
+            code_buf[(*code_idx)++] = 0xc0;
+        } else if (op == TOK_EQ) {
+            // sete al -> 0f 94 c0
+            code_buf[(*code_idx)++] = 0x0f;
+            code_buf[(*code_idx)++] = 0x94;
+            code_buf[(*code_idx)++] = 0xc0;
+        } else {
+            // setne al -> 0f 95 c0
+            code_buf[(*code_idx)++] = 0x0f;
+            code_buf[(*code_idx)++] = 0x95;
+            code_buf[(*code_idx)++] = 0xc0;
+        }
+        // movzx eax, al -> 0f b6 c0
+        code_buf[(*code_idx)++] = 0x0f;
+        code_buf[(*code_idx)++] = 0xb6;
+        code_buf[(*code_idx)++] = 0xc0;
+    }
+}
+
+// Statement and block parser & code generator
+static void block(unsigned char *code_buf, int *code_idx, unsigned char *data_buf, int *data_idx);
+
+static void statement(unsigned char *code_buf, int *code_idx, unsigned char *data_buf, int *data_idx) {
+    if (tok == TOK_LBRACE) {
+        match(TOK_LBRACE);
+        block(code_buf, code_idx, data_buf, data_idx);
+        match(TOK_RBRACE);
+    } else if (tok == TOK_INT) {
+        match(TOK_INT);
+        char var_name[256];
+        strcpy(var_name, token_string);
+        match(TOK_IDENT);
+        
+        int offset = add_symbol(var_name);
+        if (tok == TOK_ASSIGN) {
+            match(TOK_ASSIGN);
+            expression(code_buf, code_idx);
+        } else {
+            // Default initialize to 0: mov eax, 0
+            code_buf[(*code_idx)++] = 0xb8;
+            unsigned int zero = 0;
+            memcpy(code_buf + *code_idx, &zero, 4);
+            *code_idx += 4;
+        }
+        // mov [rbp + offset], eax -> 89 45 [offset]
+        code_buf[(*code_idx)++] = 0x89;
+        code_buf[(*code_idx)++] = 0x45;
+        code_buf[(*code_idx)++] = (unsigned char)offset;
+        match(TOK_SEMICOLON);
+    } else if (tok == TOK_IDENT) {
+        char var_name[256];
+        strcpy(var_name, token_string);
+        match(TOK_IDENT);
+        
+        int offset = lookup_symbol(var_name);
+        if (offset == 0) {
+            printf("Error: Undefined variable %s\n", var_name);
+            sys_exit();
+        }
+        match(TOK_ASSIGN);
+        expression(code_buf, code_idx);
+        // mov [rbp + offset], eax -> 89 45 [offset]
+        code_buf[(*code_idx)++] = 0x89;
+        code_buf[(*code_idx)++] = 0x45;
+        code_buf[(*code_idx)++] = (unsigned char)offset;
+        match(TOK_SEMICOLON);
+    } else if (tok == TOK_IF) {
+        match(TOK_IF);
+        match(TOK_LPAREN);
+        expression(code_buf, code_idx);
+        match(TOK_RPAREN);
+        
+        // test eax, eax -> 85 c0
+        code_buf[(*code_idx)++] = 0x85;
+        code_buf[(*code_idx)++] = 0xc0;
+        
+        // jz else_label -> 0f 84 [4 bytes relative offset]
+        code_buf[(*code_idx)++] = 0x0f;
+        code_buf[(*code_idx)++] = 0x84;
+        int jz_offset_idx = *code_idx;
+        *code_idx += 4; // reserve space
+        
+        statement(code_buf, code_idx, data_buf, data_idx);
+        
+        if (tok == TOK_ELSE) {
+            match(TOK_ELSE);
+            // jmp end_label -> e9 [4 bytes relative offset]
+            code_buf[(*code_idx)++] = 0xe9;
+            int jmp_offset_idx = *code_idx;
+            *code_idx += 4; // reserve space
+            
+            // Patch else_label to point here
+            int else_offset = *code_idx - (jz_offset_idx + 4);
+            memcpy(code_buf + jz_offset_idx, &else_offset, 4);
+            
+            statement(code_buf, code_idx, data_buf, data_idx);
+            
+            // Patch end_label to point here
+            int end_offset = *code_idx - (jmp_offset_idx + 4);
+            memcpy(code_buf + jmp_offset_idx, &end_offset, 4);
+        } else {
+            // Patch else_label (which is end_label) to point here
+            int else_offset = *code_idx - (jz_offset_idx + 4);
+            memcpy(code_buf + jz_offset_idx, &else_offset, 4);
+        }
+    } else if (tok == TOK_WHILE) {
+        int start_addr = *code_idx;
+        match(TOK_WHILE);
+        match(TOK_LPAREN);
+        expression(code_buf, code_idx);
+        match(TOK_RPAREN);
+        
+        // test eax, eax -> 85 c0
+        code_buf[(*code_idx)++] = 0x85;
+        code_buf[(*code_idx)++] = 0xc0;
+        
+        // jz end_label -> 0f 84 [4 bytes relative offset]
+        code_buf[(*code_idx)++] = 0x0f;
+        code_buf[(*code_idx)++] = 0x84;
+        int jz_offset_idx = *code_idx;
+        *code_idx += 4; // reserve space
+        
+        statement(code_buf, code_idx, data_buf, data_idx);
+        
+        // jmp start_addr -> e9 [4 bytes relative offset]
+        code_buf[(*code_idx)++] = 0xe9;
+        int jump_back = start_addr - (*code_idx + 4);
+        memcpy(code_buf + *code_idx, &jump_back, 4);
+        *code_idx += 4;
+        
+        // Patch end_label to point here
+        int end_offset = *code_idx - (jz_offset_idx + 4);
+        memcpy(code_buf + jz_offset_idx, &end_offset, 4);
+    } else if (tok == TOK_PRINTF) {
+        match(TOK_PRINTF);
+        match(TOK_LPAREN);
+        
+        // Store string literal into data segment
+        int str_len = (int)strlen(token_string) + 1; // include null terminator
+        if (*data_idx + str_len >= MAX_DATA_SIZE) {
+            printf("Error: Data segment overflow\n");
+            sys_exit();
+        }
+        int str_offset = *data_idx;
+        memcpy(data_buf + *data_idx, token_string, str_len);
+        *data_idx += str_len;
+        match(TOK_STRING);
+        match(TOK_RPAREN);
+        match(TOK_SEMICOLON);
+
+        // Emit print string sequence:
+        // mov rsi, imm64 (10 bytes) -> 48 be [8 bytes address]
+        code_buf[(*code_idx)++] = 0x48;
+        code_buf[(*code_idx)++] = 0xbe;
+        unsigned long temp_offset = (unsigned long)str_offset;
+        memcpy(code_buf + *code_idx, &temp_offset, 8);
+        *code_idx += 8;
+
+        // movzx edi, byte ptr [rsi] (3 bytes) -> 0f b6 3e
+        code_buf[(*code_idx)++] = 0x0f;
+        code_buf[(*code_idx)++] = 0xb6;
+        code_buf[(*code_idx)++] = 0x3e;
+
+        // test edi, edi (2 bytes) -> 85 ff
+        code_buf[(*code_idx)++] = 0x85;
+        code_buf[(*code_idx)++] = 0xff;
+
+        // jz +12 (2 bytes) -> 74 0c
+        code_buf[(*code_idx)++] = 0x74;
+        code_buf[(*code_idx)++] = 0x0c;
+
+        // mov eax, 1 (5 bytes) -> b8 01 00 00 00 (sys_print_char syscall number)
+        code_buf[(*code_idx)++] = 0xb8;
+        code_buf[(*code_idx)++] = 0x01;
+        code_buf[(*code_idx)++] = 0x00;
+        code_buf[(*code_idx)++] = 0x00;
+        code_buf[(*code_idx)++] = 0x00;
+
+        // syscall (2 bytes) -> 0f 05
+        code_buf[(*code_idx)++] = 0x0f;
+        code_buf[(*code_idx)++] = 0x05;
+
+        // inc rsi (3 bytes) -> 48 ff c6
+        code_buf[(*code_idx)++] = 0x48;
+        code_buf[(*code_idx)++] = 0xff;
+        code_buf[(*code_idx)++] = 0xc6;
+
+        // jmp -25 (2 bytes) -> eb ed
+        code_buf[(*code_idx)++] = 0xeb;
+        code_buf[(*code_idx)++] = 0xed;
+    } else if (tok == TOK_RETURN) {
+        match(TOK_RETURN);
+        expression(code_buf, code_idx);
+        match(TOK_SEMICOLON);
+    } else {
+        printf("Error: Unexpected token in statement: %d\n", tok);
+        sys_exit();
+    }
+}
+
+static void block(unsigned char *code_buf, int *code_idx, unsigned char *data_buf, int *data_idx) {
+    while (tok != TOK_RBRACE && tok != TOK_EOF) {
+        statement(code_buf, code_idx, data_buf, data_idx);
+    }
+}
+
 void _start(void) {
-    // We expect arguments to be passed but since we have a simple exec without argv,
-    // we read from static inputs or configuration file.
-    // For Keira self-hosting verification, we will compile `/apps/src/demo.c`
-    // and write to `/apps/bin/demo.elf`.
-    printf("Keira C Compiler (kcc) v0.12.0\n");
+    printf("Keira C Compiler (kcc) v0.13.0\n");
     printf("Compiling source: /apps/src/demo.c -> /apps/bin/demo.elf\n");
 
     // Open source file
@@ -198,112 +587,41 @@ void _start(void) {
     code_buf[code_idx++] = 0x48;
     code_buf[code_idx++] = 0x89;
     code_buf[code_idx++] = 0xe5;
+    // sub rsp, 128 (to support up to 32 local variables)
+    code_buf[code_idx++] = 0x48;
+    code_buf[code_idx++] = 0x81;
+    code_buf[code_idx++] = 0xec;
+    code_buf[code_idx++] = 0x80;
+    code_buf[code_idx++] = 0x00;
+    code_buf[code_idx++] = 0x00;
+    code_buf[code_idx++] = 0x00;
 
-    TokenType tok;
-    while ((tok = next_token()) != TOK_EOF) {
+    tok = next_token();
+    while (tok != TOK_EOF) {
         if (tok == TOK_INT || tok == TOK_VOID) {
             tok = next_token();
             if (tok == TOK_MAIN) {
-                // main() signature
-                if (next_token() != TOK_LPAREN || next_token() != TOK_RPAREN || next_token() != TOK_LBRACE) {
-                    printf("Error: Invalid main function syntax\n");
-                    goto cleanup;
-                }
-
-                // Parse function body
-                while ((tok = next_token()) != TOK_RBRACE && tok != TOK_EOF) {
-                    if (tok == TOK_PRINTF) {
-                        if (next_token() != TOK_LPAREN || next_token() != TOK_STRING) {
-                            printf("Error: printf expects string argument\n");
-                            goto cleanup;
-                        }
-
-                        // Store string literal into data segment
-                        int str_len = (int)strlen(token_string) + 1; // include null terminator
-                        if (data_idx + str_len >= MAX_DATA_SIZE) {
-                            printf("Error: Data segment overflow\n");
-                            goto cleanup;
-                        }
-                        int str_offset = data_idx;
-                        memcpy(data_buf + data_idx, token_string, str_len);
-                        data_idx += str_len;
-
-                        if (next_token() != TOK_RPAREN || next_token() != TOK_SEMICOLON) {
-                            printf("Error: Expected ); after printf\n");
-                            goto cleanup;
-                        }
-
-                        // Emit print string sequence:
-                        // The base address of user space executables is 0x40000000.
-                        // ELF header (64 bytes) + Program Header (56 bytes) = 120 bytes.
-                        // The text segment starts at 0x40000000 + 120 = 0x40000078.
-                        // Let's defer string address calculation until we know code size,
-                        // or we can calculate it relative to the end of the text segment.
-                        // Since data segment is appended directly after the code segment:
-                        // String VAddr = 0x40000000 + 120 + final_code_size + str_offset.
-                        // We will write dummy address bytes and patch it later!
-
-                        // mov rsi, imm64 (10 bytes) -> 48 be [8 bytes address]
-                        code_buf[code_idx++] = 0x48;
-                        code_buf[code_idx++] = 0xbe;
-                        // Store the str_offset temporarily in the address slot for patching
-                        unsigned long temp_offset = (unsigned long)str_offset;
-                        memcpy(code_buf + code_idx, &temp_offset, 8);
-                        code_idx += 8;
-
-                        // movzx edi, byte ptr [rsi] (3 bytes) -> 0f b6 3e
-                        code_buf[code_idx++] = 0x0f;
-                        code_buf[code_idx++] = 0xb6;
-                        code_buf[code_idx++] = 0x3e;
-
-                        // test edi, edi (2 bytes) -> 85 ff
-                        code_buf[code_idx++] = 0x85;
-                        code_buf[code_idx++] = 0xff;
-
-                        // jz +12 (2 bytes) -> 74 0c
-                        code_buf[code_idx++] = 0x74;
-                        code_buf[code_idx++] = 0x0c;
-
-                        // mov eax, 1 (5 bytes) -> b8 01 00 00 00 (sys_print_char syscall number)
-                        code_buf[code_idx++] = 0xb8;
-                        code_buf[code_idx++] = 0x01;
-                        code_buf[code_idx++] = 0x00;
-                        code_buf[code_idx++] = 0x00;
-                        code_buf[code_idx++] = 0x00;
-
-                        // syscall (2 bytes) -> 0f 05
-                        code_buf[code_idx++] = 0x0f;
-                        code_buf[code_idx++] = 0x05;
-
-                        // inc rsi (3 bytes) -> 48 ff c6
-                        code_buf[code_idx++] = 0x48;
-                        code_buf[code_idx++] = 0xff;
-                        code_buf[code_idx++] = 0xc6;
-
-                        // jmp -25 (2 bytes) -> eb ed (jump back to movzx)
-                        code_buf[code_idx++] = 0xeb;
-                        code_buf[code_idx++] = 0xed;
-                    } else if (tok == TOK_RETURN) {
-                        if (next_token() != TOK_NUM || next_token() != TOK_SEMICOLON) {
-                            printf("Error: return expects simple number expression\n");
-                            goto cleanup;
-                        }
-                        // mov eax, token_num (5 bytes) -> b8 [4 bytes num]
-                        code_buf[code_idx++] = 0xb8;
-                        unsigned int ret_val = (unsigned int)token_num;
-                        memcpy(code_buf + code_idx, &ret_val, 4);
-                        code_idx += 4;
-                    }
-                }
-                break; // Handled main function
+                match(TOK_MAIN);
+                match(TOK_LPAREN);
+                match(TOK_RPAREN);
+                match(TOK_LBRACE);
+                block(code_buf, &code_idx, data_buf, &data_idx);
+                match(TOK_RBRACE);
+                break; // Compiled main function successfully
             }
+        } else {
+            tok = next_token();
         }
     }
 
     // Emitting standard epilogue:
+    // mov rsp, rbp
+    code_buf[code_idx++] = 0x48;
+    code_buf[code_idx++] = 0x89;
+    code_buf[code_idx++] = 0xec;
     // pop rbp
     code_buf[code_idx++] = 0x5d;
-    // sys_exit (5 bytes mov eax, 2 + 2 bytes syscall)
+    // sys_exit:
     // mov eax, 2
     code_buf[code_idx++] = 0xb8;
     code_buf[code_idx++] = 0x02;
@@ -314,7 +632,7 @@ void _start(void) {
     code_buf[code_idx++] = 0x0f;
     code_buf[code_idx++] = 0x05;
 
-    // Patch the string addresses in the emitted code now that code_idx is final
+    // Patch string absolute virtual addresses
     unsigned long final_code_size = (unsigned long)code_idx;
     unsigned long base_vaddr = 0x40000000;
     unsigned long headers_size = 120;
@@ -324,11 +642,9 @@ void _start(void) {
     int scan_idx = 0;
     while (scan_idx < code_idx) {
         if (code_buf[scan_idx] == 0x48 && code_buf[scan_idx + 1] == 0xbe) {
-            // Patch target found! Read the temporary offset from the next 8 bytes
             unsigned long str_offset;
             memcpy(&str_offset, code_buf + scan_idx + 2, 8);
             unsigned long target_vaddr = data_start_vaddr + str_offset;
-            // Write the correct absolute virtual address
             memcpy(code_buf + scan_idx + 2, &target_vaddr, 8);
             scan_idx += 10;
         } else {
@@ -366,24 +682,19 @@ void _start(void) {
     phdr.p_memsz = phdr.p_filesz;
     phdr.p_align = 4096;
 
-    // Create the output file `/apps/bin/demo.elf`
-    // Open in write-mode (creates if doesn't exist)
+    // Create output executable file
     int out_fd = sys_open("/apps/bin/demo.elf", 1);
     if (out_fd < 0) {
         printf("Error: Could not open output file /apps/bin/demo.elf\n");
         goto cleanup;
     }
 
-    // Write Elf Header
     sys_write(out_fd, &ehdr, sizeof(ehdr));
-    // Write Program Header
     sys_write(out_fd, &phdr, sizeof(phdr));
-    // Write Code Segment
     sys_write(out_fd, code_buf, final_code_size);
-    // Write Data Segment
     sys_write(out_fd, data_buf, data_idx);
-
     sys_close(out_fd);
+
     printf("Compilation Success! Created executable /apps/bin/demo.elf\n");
 
 cleanup:

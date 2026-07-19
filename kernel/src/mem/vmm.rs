@@ -178,3 +178,119 @@ pub unsafe fn get_phys_addr(virtual_addr: u64) -> Option<u64> {
 
     Some((entry & !0xFFF) | (virtual_addr & 0xFFF))
 }
+
+/// Clone the boot PML4, sharing only the kernel identity-map (PDPT[0]).
+/// User-space entries are left empty for the new process to populate.
+pub unsafe fn clone_kernel_pml4() -> Result<u64, &'static str> {
+    let boot_pml4_phys = active_pml4();
+    let boot_pml4 = boot_pml4_phys as *const u64;
+
+    // Allocate a new PML4 frame (zeroed by pmm::alloc_frame)
+    let new_pml4_phys = pmm::alloc_frame().ok_or("Out of memory for new PML4")?;
+    let new_pml4 = new_pml4_phys as *mut u64;
+
+    // Read the boot PML4[0] entry — it points to the boot PDPT
+    let boot_pml4_0 = *boot_pml4;
+    if (boot_pml4_0 & PAGE_PRESENT) == 0 {
+        pmm::free_frame(new_pml4_phys);
+        return Err("Boot PML4[0] is not present");
+    }
+
+    let boot_pdpt_phys = boot_pml4_0 & !0xFFF;
+    let boot_pdpt = boot_pdpt_phys as *const u64;
+
+    // Allocate a new PDPT for the child process
+    let new_pdpt_phys = pmm::alloc_frame().ok_or("Out of memory for new PDPT")?;
+    let new_pdpt = new_pdpt_phys as *mut u64;
+
+    // Copy only PDPT[0] (kernel identity map: first 1GB via 2MB huge pages)
+    *new_pdpt = *boot_pdpt;
+
+    // PDPT[1..511] are zeroed by alloc_frame — user space starts fresh
+
+    // Set new PML4[0] = new PDPT with present + writable + user flags
+    *new_pml4 = new_pdpt_phys | PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER;
+
+    // PML4[1..511] are zeroed by alloc_frame — user heap/stack space starts fresh
+
+    Ok(new_pml4_phys)
+}
+
+/// Switch the active address space by writing a new PML4 physical address to CR3
+pub unsafe fn switch_address_space(pml4_phys: u64) {
+    core::arch::asm!("mov cr3, {}", in(reg) pml4_phys);
+}
+
+/// Free all user-space pages and page table frames from a process's PML4.
+/// Must be called while a DIFFERENT address space is active (e.g., boot PML4).
+pub unsafe fn free_user_pages(pml4_phys: u64, program_break: u64) {
+    // Temporarily switch to the target address space to walk its page tables
+    let saved_cr3 = active_pml4();
+    switch_address_space(pml4_phys);
+
+    // 1. Free user code/data pages (0x40000000 .. 0x40040000 = 256KB range)
+    let mut addr: u64 = 0x40000000;
+    while addr < 0x40040000 {
+        let _ = free_and_unmap_page(addr);
+        addr += pmm::PAGE_SIZE;
+    }
+
+    // 2. Free user heap pages (0x600000000000 .. program_break)
+    addr = 0x600000000000;
+    while addr < program_break {
+        let _ = free_and_unmap_page(addr);
+        addr += pmm::PAGE_SIZE;
+    }
+
+    // 3. Free user stack page
+    let _ = free_and_unmap_page(0x7FFFFFFF0000);
+
+    // Switch back to the caller's address space
+    switch_address_space(saved_cr3);
+
+    // 4. Free the child's page table frames (PDPT and intermediate PD/PT tables)
+    let pml4 = pml4_phys as *const u64;
+    let pml4_0 = *pml4;
+    if (pml4_0 & PAGE_PRESENT) != 0 {
+        let pdpt_phys = pml4_0 & !0xFFF;
+        let pdpt = pdpt_phys as *const u64;
+
+        // Free page table structures under PDPT[1..511] (user code area under PML4[0])
+        for i in 1..512 {
+            let pdpt_entry = *pdpt.add(i);
+            if (pdpt_entry & PAGE_PRESENT) != 0 {
+                free_page_table_tree(pdpt_entry & !0xFFF, 2); // level 2 = PD
+            }
+        }
+        pmm::free_frame(pdpt_phys);
+    }
+
+    // Free page table structures under PML4[1..511] (user heap/stack)
+    for i in 1..512 {
+        let entry = *pml4.add(i);
+        if (entry & PAGE_PRESENT) != 0 {
+            free_page_table_tree(entry & !0xFFF, 3); // level 3 = PDPT
+        }
+    }
+
+    // Free the PML4 frame itself
+    pmm::free_frame(pml4_phys);
+}
+
+/// Recursively free page table frames at a given level.
+/// Level 3 = PDPT, Level 2 = PD, Level 1 = PT
+unsafe fn free_page_table_tree(table_phys: u64, level: u32) {
+    let table = table_phys as *const u64;
+    if level > 1 {
+        for i in 0..512 {
+            let entry = *table.add(i);
+            if (entry & PAGE_PRESENT) != 0 {
+                // Skip huge pages (bit 7) — they're part of the identity map
+                if (entry & (1 << 7)) == 0 {
+                    free_page_table_tree(entry & !0xFFF, level - 1);
+                }
+            }
+        }
+    }
+    pmm::free_frame(table_phys);
+}

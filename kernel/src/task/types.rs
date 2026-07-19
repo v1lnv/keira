@@ -5,6 +5,7 @@ pub enum TaskState {
     Ready,
     Running,
     Terminated,
+    WaitChild(usize),
 }
 
 #[derive(Clone, Copy)]
@@ -46,6 +47,7 @@ pub struct Task {
     pub cwd: [u8; 128],
     pub cwd_len: usize,
     pub parent_id: usize,
+    pub pml4_phys: u64, // Physical address of this task's PML4 page table
 }
 
 #[repr(C, packed)]

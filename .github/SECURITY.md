@@ -6,8 +6,8 @@ We only support security updates for the active branches (`develop` and `main`).
 
 | Version | Supported |
 | ------- | --------- |
-| 0.12.x  | Yes       |
-| < 0.12.0| No        |
+| 0.13.x  | Yes       |
+| < 0.13.0| No        |
 
 ## Reporting a Vulnerability
 

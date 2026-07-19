@@ -56,8 +56,13 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
             }
             0
         }
-        // Syscall 2: Exit User Mode (special return code to trigger ASM exit jump)
-        2 => 0xDEADBEEF,
+        // Syscall 2: Exit User Mode
+        2 => {
+            unsafe {
+                crate::task::scheduler::exit_current();
+            }
+            0
+        }
         // Syscall 3: Sleep (busy halt)
         3 => {
             let ms = arg1;
@@ -107,6 +112,13 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
                 Ok(s) => s,
                 Err(_) => return u64::MAX,
             };
+
+            let task_id = unsafe { crate::task::scheduler::CURRENT_TASK_IDX };
+            if write_mode {
+                if unsafe { crate::fs::lock::acquire_lock(path_str, task_id) }.is_err() {
+                    return u64::MAX;
+                }
+            }
 
             // Check if file exists, if not write_mode and it doesn't exist, error out
             let exists = crate::fs::vfs::exists(path_str);
@@ -261,6 +273,12 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
                 let task = &mut crate::task::scheduler::TASKS[crate::task::scheduler::CURRENT_TASK_IDX];
                 if let Some(t) = task {
                     if t.fds[fd].is_open {
+                        if t.fds[fd].write_mode {
+                            if let Ok(path_str) = core::str::from_utf8(&t.fds[fd].path[..t.fds[fd].path_len]) {
+                                let task_id = crate::task::scheduler::CURRENT_TASK_IDX;
+                                crate::fs::lock::release_lock(path_str, task_id);
+                            }
+                        }
                         t.fds[fd].is_open = false;
                         return 0;
                     }
@@ -359,15 +377,8 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
             };
             if let Ok(filename_str) = core::str::from_utf8(&name_buf[..len]) {
                 unsafe {
-                    let parent_idx = crate::task::scheduler::CURRENT_TASK_IDX;
-                    match crate::fs::elf::run_user_program(filename_str) {
-                        Ok(_) => {
-                            // Synchronous spawn completed; return a synthetic child PID
-                            // Since run_user_program blocks, we return the parent's index + 100
-                            // as a synthetic child PID indicator
-                            let _ = parent_idx;
-                            0 // Success
-                        }
+                    match crate::fs::elf::spawn_user_program(filename_str) {
+                        Ok(pid) => pid as u64,
                         Err(_) => u64::MAX,
                     }
                 }
@@ -376,9 +387,12 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
             }
         }
         // Syscall 13: waitpid
-        // Signature: sys_waitpid(pid: u64) -> status (0 = already exited for sync spawn)
+        // Signature: sys_waitpid(pid: u64) -> status
         13 => {
-            // In synchronous spawn model, child has already completed
+            let child_id = arg1 as usize;
+            unsafe {
+                crate::task::scheduler::wait_for_task(child_id);
+            }
             0
         }
         // Syscall 14: getpid
