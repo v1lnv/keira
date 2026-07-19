@@ -1,7 +1,6 @@
 //! Keira Kernel: FAT16 Path Resolution and Entry Lookup
 
-use super::dir::for_each_directory_sector;
-use super::read_sector;
+use super::dir::for_each_directory_entry;
 use super::types::{DirectoryEntry, FoundEntry, LfnEntry, LfnAccumulator};
 
 /// Accumulates unicode character parts from an LFN entry into the accumulator
@@ -188,74 +187,17 @@ pub unsafe fn resolve_path(path: &str) -> Result<(u16, &str), &'static str> {
 }
 
 pub unsafe fn find_entry(filename: &str, dir_cluster: u16) -> Result<FoundEntry, &'static str> {
-    let mut sector_data = [0u8; 512];
     let mut found: Option<FoundEntry> = None;
-    let mut lfn_accum = LfnAccumulator::new();
 
-    for_each_directory_sector(dir_cluster, |sector| {
-        read_sector(sector, &mut sector_data)?;
-        let entries = sector_data.as_ptr() as *const DirectoryEntry;
-        for i in 0..16 {
-            let entry = &*entries.add(i);
-            if entry.name[0] == 0x00 {
-                lfn_accum.reset();
-                return Ok(false);
-            }
-            if entry.name[0] == 0xE5 {
-                lfn_accum.reset();
-                continue;
-            }
-            if (entry.attr & 0x0F) == 0x0F {
-                accumulate_lfn(entry, &mut lfn_accum);
-                continue;
-            }
-            if (entry.attr & 0x08) != 0 {
-                lfn_accum.reset();
-                continue;
-            }
-
-            let mut matched = false;
-            let mut lfn_buf = [0u8; 260];
-            if let Some(lfn_len) = get_lfn_utf8(&lfn_accum, &mut lfn_buf) {
-                if let Ok(lfn_str) = core::str::from_utf8(&lfn_buf[..lfn_len]) {
-                    if lfn_str.eq_ignore_ascii_case(filename) {
-                        matched = true;
-                    }
-                }
-            }
-
-            if !matched {
-                let mut name_buf = [0u8; 12];
-                let name_len = format_filename(&entry.name, &mut name_buf);
-                if let Ok(name_str) = core::str::from_utf8(&name_buf[..name_len]) {
-                    if name_str.eq_ignore_ascii_case(filename) {
-                        matched = true;
-                    }
-                }
-            }
-
-            lfn_accum.reset();
-
-            if matched {
+    for_each_directory_entry(dir_cluster, |parsed| {
+        if let Ok(name_str) = core::str::from_utf8(&parsed.name[..parsed.name_len]) {
+            if name_str.eq_ignore_ascii_case(filename) {
                 found = Some(FoundEntry {
-                    sector,
-                    index: i,
-                    entry: DirectoryEntry {
-                        name: entry.name,
-                        attr: entry.attr,
-                        nt_res: entry.nt_res,
-                        crt_time_tenth: entry.crt_time_tenth,
-                        crt_time: entry.crt_time,
-                        crt_date: entry.crt_date,
-                        lst_acc_date: entry.lst_acc_date,
-                        first_cluster_hi: entry.first_cluster_hi,
-                        wrt_time: entry.wrt_time,
-                        wrt_date: entry.wrt_date,
-                        first_cluster_lo: entry.first_cluster_lo,
-                        file_size: entry.file_size,
-                    },
+                    sector: parsed.sector,
+                    index: parsed.index,
+                    entry: parsed.entry,
                 });
-                return Ok(false);
+                return Ok(false); // Stop iteration
             }
         }
         Ok(true)

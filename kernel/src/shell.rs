@@ -10,6 +10,14 @@ pub mod executor;
 pub mod history;
 pub mod state;
 
+// Keyboard scan code translation constants
+pub const KEY_UP: u8 = 0x80;
+pub const KEY_DOWN: u8 = 0x81;
+pub const KEY_LEFT: u8 = 0x82;
+pub const KEY_RIGHT: u8 = 0x83;
+pub const KEY_F3: u8 = 0x84;
+pub const KEY_F10: u8 = 0x85;
+
 use crate::io::vga;
 use autocomplete::handle_autocomplete;
 use editor::editor_handle_keypress;
@@ -129,7 +137,7 @@ pub extern "C" fn shell_handle_keypress(c: u8) {
                     }
                 }
                 // Ignore autocomplete and arrows during password input
-                9 | 0x80 | 0x81 => {}
+                9 | KEY_UP | KEY_DOWN => {}
                 _ => {
                     if BUFFER_LEN < BUFFER_SIZE - 1 {
                         INPUT_BUFFER[BUFFER_LEN] = c;
@@ -159,7 +167,7 @@ pub extern "C" fn shell_handle_keypress(c: u8) {
                 COMMAND_READY = true;
             }
             // Arrow Up
-            0x80 => {
+            KEY_UP => {
                 if HISTORY_COUNT == 0 {
                     return;
                 }
@@ -179,7 +187,7 @@ pub extern "C" fn shell_handle_keypress(c: u8) {
                 history_load(idx);
             }
             // Arrow Down
-            0x81 => {
+            KEY_DOWN => {
                 if HISTORY_INDEX < 0 {
                     return;
                 }

@@ -78,6 +78,75 @@ where
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+pub struct ParsedDirectoryEntry {
+    pub entry: DirectoryEntry,
+    pub sector: u32,
+    pub index: usize,
+    pub name: [u8; 260],
+    pub name_len: usize,
+}
+
+pub unsafe fn for_each_directory_entry<F>(
+    dir_cluster: u16,
+    mut callback: F,
+) -> Result<(), &'static str>
+where
+    F: FnMut(&ParsedDirectoryEntry) -> Result<bool, &'static str>,
+{
+    let mut sector_data = [0u8; 512];
+    let mut lfn_accum = LfnAccumulator::new();
+
+    for_each_directory_sector(dir_cluster, |sector| {
+        read_sector(sector, &mut sector_data)?;
+        let entries = sector_data.as_ptr() as *const DirectoryEntry;
+        for i in 0..16 {
+            let entry = &*entries.add(i);
+            if entry.name[0] == 0x00 {
+                lfn_accum.reset();
+                return Ok(false);
+            }
+            if entry.name[0] == 0xE5 {
+                lfn_accum.reset();
+                continue;
+            }
+            if (entry.attr & 0x0F) == 0x0F {
+                accumulate_lfn(entry, &mut lfn_accum);
+                continue;
+            }
+            if (entry.attr & 0x08) != 0 {
+                lfn_accum.reset();
+                continue;
+            }
+
+            let mut lfn_buf = [0u8; 260];
+            let name_len = if let Some(len) = get_lfn_utf8(&lfn_accum, &mut lfn_buf) {
+                len
+            } else {
+                let mut name83 = [0u8; 12];
+                let len = format_filename(&entry.name, &mut name83);
+                lfn_buf[..len].copy_from_slice(&name83[..len]);
+                len
+            };
+
+            lfn_accum.reset();
+
+            let parsed = ParsedDirectoryEntry {
+                entry: *entry,
+                sector,
+                index: i,
+                name: lfn_buf,
+                name_len,
+            };
+
+            if !callback(&parsed)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    })
+}
+
 pub unsafe fn create_directory_entry(
     name: [u8; 11],
     attr: u8,
@@ -183,36 +252,21 @@ pub unsafe fn init_dir_cluster(
     Ok(())
 }
 
-pub unsafe fn is_dir_empty(cluster: u16, vol: &Fat16Volume) -> Result<bool, &'static str> {
+pub unsafe fn is_dir_empty(cluster: u16, _vol: &Fat16Volume) -> Result<bool, &'static str> {
     if cluster < 2 {
         return Ok(true);
     }
-    let mut sector_data = [0u8; 512];
-    let first_sector = cluster_to_sector(cluster, vol);
-
-    for s in 0..vol.sectors_per_cluster as u32 {
-        read_sector(first_sector + s, &mut sector_data)?;
-        let entries = sector_data.as_ptr() as *const DirectoryEntry;
-        for i in 0..16 {
-            let entry = &*entries.add(i);
-            if entry.name[0] == 0x00 {
-                break; // End of directory
-            }
-            if entry.name[0] == 0xE5 {
-                continue; // Deleted
-            }
-
-            let name_slice = &entry.name;
-            let is_dot = name_slice[0] == b'.' && name_slice[1..11].iter().all(|&b| b == b' ');
-            let is_dotdot = name_slice[0] == b'.'
-                && name_slice[1] == b'.'
-                && name_slice[2..11].iter().all(|&b| b == b' ');
-            if !is_dot && !is_dotdot {
-                return Ok(false); // Found a non-special file/folder, not empty
+    let mut empty = true;
+    for_each_directory_entry(cluster, |parsed| {
+        if let Ok(name_str) = core::str::from_utf8(&parsed.name[..parsed.name_len]) {
+            if name_str != "." && name_str != ".." {
+                empty = false;
+                return Ok(false);
             }
         }
-    }
-    Ok(true)
+        Ok(true)
+    })?;
+    Ok(empty)
 }
 
 pub unsafe fn get_dir_cluster(path: &str) -> Result<u16, &'static str> {
@@ -264,76 +318,34 @@ pub unsafe fn list_files_in_dir(dir_cluster: u16, show_all: bool) -> Result<(), 
     vga::set_color(vga::Color::White, vga::Color::Black);
 
     let mut count = 0;
-    let mut sector_data = [0u8; 512];
-    let mut lfn_accum = LfnAccumulator::new();
-
-    let res = for_each_directory_sector(dir_cluster, |sector| {
-        if read_sector(sector, &mut sector_data).is_err() {
-            lfn_accum.reset();
-            return Err("Error reading sector");
-        }
-
-        let entries = sector_data.as_ptr() as *const DirectoryEntry;
-        for i in 0..16 {
-            let entry = &*entries.add(i);
-
-            if entry.name[0] == 0x00 {
-                lfn_accum.reset();
-                return Ok(false);
-            }
-            if entry.name[0] == 0xE5 {
-                lfn_accum.reset();
-                continue;
-            }
-            if (entry.attr & 0x0F) == 0x0F {
-                accumulate_lfn(entry, &mut lfn_accum);
-                continue;
-            }
-            if (entry.attr & 0x08) != 0 {
-                lfn_accum.reset();
-                continue;
+    let res = for_each_directory_entry(dir_cluster, |parsed| {
+        if let Ok(name_str) = core::str::from_utf8(&parsed.name[..parsed.name_len]) {
+            if !show_all {
+                if name_str == "." || name_str == ".." {
+                    return Ok(true);
+                }
+                if (parsed.entry.attr & 0x06) != 0 {
+                    return Ok(true);
+                }
             }
 
-            let mut lfn_buf = [0u8; 260];
-            let name_len = if let Some(len) = get_lfn_utf8(&lfn_accum, &mut lfn_buf) {
-                len
+            if (parsed.entry.attr & 0x10) != 0 {
+                vga::set_color(vga::Color::LightBlue, vga::Color::Black);
+                vga::print_str("  [dir]  ");
+                vga::print_str(name_str);
             } else {
-                let mut name83 = [0u8; 12];
-                let len = format_filename(&entry.name, &mut name83);
-                lfn_buf[..len].copy_from_slice(&name83[..len]);
-                len
-            };
+                vga::set_color(vga::Color::LightGreen, vga::Color::Black);
+                vga::print_str("  [file] ");
+                vga::set_color(vga::Color::White, vga::Color::Black);
+                vga::print_str(name_str);
 
-            lfn_accum.reset();
-
-            if let Ok(name_str) = core::str::from_utf8(&lfn_buf[..name_len]) {
-                if !show_all {
-                    if name_str == "." || name_str == ".." {
-                        continue;
-                    }
-                    if (entry.attr & 0x06) != 0 {
-                        continue;
-                    }
-                }
-
-                if (entry.attr & 0x10) != 0 {
-                    vga::set_color(vga::Color::LightBlue, vga::Color::Black);
-                    vga::print_str("  [dir]  ");
-                    vga::print_str(name_str);
-                } else {
-                    vga::set_color(vga::Color::LightGreen, vga::Color::Black);
-                    vga::print_str("  [file] ");
-                    vga::set_color(vga::Color::White, vga::Color::Black);
-                    vga::print_str(name_str);
-
-                    vga::set_color(vga::Color::DarkGrey, vga::Color::Black);
-                    vga::print_str(" (");
-                    vga::print_u64(entry.file_size as u64);
-                    vga::print_str(" bytes)");
-                }
-                vga::print_str("\n");
-                count += 1;
+                vga::set_color(vga::Color::DarkGrey, vga::Color::Black);
+                vga::print_str(" (");
+                vga::print_u64(parsed.entry.file_size as u64);
+                vga::print_str(" bytes)");
             }
+            vga::print_str("\n");
+            count += 1;
         }
         Ok(true)
     });
@@ -357,31 +369,10 @@ pub unsafe fn find_matches<F>(prefix: &str, mut callback: F)
 where
     F: FnMut(&str),
 {
-    let mut sector_data = [0u8; 512];
-    let _ = for_each_directory_sector(CURRENT_DIR_CLUSTER, |sector| {
-        if read_sector(sector, &mut sector_data).is_err() {
-            return Err("Error reading sector");
-        }
-
-        let entries = sector_data.as_ptr() as *const DirectoryEntry;
-        for i in 0..16 {
-            let entry = &*entries.add(i);
-            if entry.name[0] == 0x00 {
-                return Ok(false);
-            }
-            if entry.name[0] == 0xE5 {
-                continue;
-            }
-            if (entry.attr & 0x0F) == 0x0F || (entry.attr & 0x08) != 0 {
-                continue;
-            }
-
-            let mut name_buf = [0u8; 12];
-            let name_len = format_filename(&entry.name, &mut name_buf);
-            if let Ok(name_str) = core::str::from_utf8(&name_buf[..name_len]) {
-                if name_str.starts_with(prefix) {
-                    callback(name_str);
-                }
+    let _ = for_each_directory_entry(CURRENT_DIR_CLUSTER, |parsed| {
+        if let Ok(name_str) = core::str::from_utf8(&parsed.name[..parsed.name_len]) {
+            if name_str.starts_with(prefix) {
+                callback(name_str);
             }
         }
         Ok(true)

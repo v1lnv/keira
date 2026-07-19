@@ -4,6 +4,17 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-19
+
+### Added
+- Standard keyboard special key code constants (`KEY_UP`, `KEY_DOWN`, etc.) in shell and editor modules, eliminating magic scan code numbers.
+
+### Refactored
+- Unified FAT16 directory entry traversal by introducing the closure-based iterator `for_each_directory_entry` inside `dir.rs`, simplifying search, listing, and empty checks.
+
+### Fixed
+- Hardened Ring 3 system call parameter boundaries by implementing `validate_user_ptr` to verify user space bounds (`[0x40000000, 0x800000000000)`) on `sys_read`, `sys_write`, and `sys_getcwd`, preventing info leaks and privilege escalation.
+
 ## [0.11.1] - 2026-07-19
 
 ### Fixed

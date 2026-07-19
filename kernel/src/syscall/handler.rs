@@ -6,6 +6,21 @@ extern "C" {
     fn get_uptime_ms() -> u64;
 }
 
+fn validate_user_ptr(ptr: u64, len: u64) -> Result<(), &'static str> {
+    if len == 0 {
+        return Ok(());
+    }
+    let end = match ptr.checked_add(len) {
+        Some(e) => e,
+        None => return Err("Integer overflow in address calculation"),
+    };
+    if ptr >= 0x40000000 && end <= 0x800000000000 {
+        Ok(())
+    } else {
+        Err("Address range resides outside user space boundaries")
+    }
+}
+
 unsafe fn read_user_string(ptr: *const u8, buf: &mut [u8]) -> Result<usize, &'static str> {
     if ptr.is_null() {
         return Err("Null pointer");
@@ -13,6 +28,10 @@ unsafe fn read_user_string(ptr: *const u8, buf: &mut [u8]) -> Result<usize, &'st
     let mut len = 0;
     let max_len = buf.len();
     while len < max_len - 1 {
+        let addr = ptr.add(len) as u64;
+        if addr < 0x40000000 || addr >= 0x800000000000 {
+            return Err("Address resides outside user space boundaries");
+        }
         let c = *ptr.add(len);
         if c == 0 {
             break;
@@ -132,6 +151,9 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
             if fd >= 8 || buf_ptr.is_null() {
                 return u64::MAX;
             }
+            if validate_user_ptr(buf_ptr as u64, len).is_err() {
+                return u64::MAX;
+            }
 
             unsafe {
                 let task = &mut crate::task::scheduler::TASKS[crate::task::scheduler::CURRENT_TASK_IDX];
@@ -181,6 +203,9 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
             let buf_ptr = arg2 as *const u8;
             let len = arg3;
             if fd >= 8 || buf_ptr.is_null() {
+                return u64::MAX;
+            }
+            if validate_user_ptr(buf_ptr as u64, len).is_err() {
                 return u64::MAX;
             }
 
@@ -374,6 +399,9 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
             let buf_ptr = arg1 as *mut u8;
             let buf_len = arg2;
             if buf_ptr.is_null() || buf_len == 0 {
+                return u64::MAX;
+            }
+            if validate_user_ptr(buf_ptr as u64, buf_len).is_err() {
                 return u64::MAX;
             }
             unsafe {

@@ -1,6 +1,7 @@
 //! Keira Kernel: VGA Code Editor
 
 use super::state::*;
+use super::{KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT};
 use crate::io::vga;
 
 unsafe fn editor_save_file() -> Result<(), &'static str> {
@@ -758,7 +759,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
                 editor_redraw();
             }
         }
-        0x80 => {
+        KEY_UP => {
             if EDIT_CUR_Y > 0 {
                 EDIT_CUR_Y -= 1;
                 let len = LINE_LENS[EDIT_CUR_Y as usize];
@@ -768,7 +769,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
                 editor_redraw();
             }
         }
-        0x81 => {
+        KEY_DOWN => {
             if EDIT_CUR_Y < 22 {
                 EDIT_CUR_Y += 1;
                 let len = LINE_LENS[EDIT_CUR_Y as usize];
@@ -778,7 +779,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
                 editor_redraw();
             }
         }
-        0x82 => {
+        KEY_LEFT => {
             // Arrow Left
             if EDIT_CUR_X > 0 {
                 EDIT_CUR_X -= 1;
@@ -789,7 +790,7 @@ pub unsafe fn editor_handle_keypress(c: u8) {
                 editor_redraw();
             }
         }
-        0x83 => {
+        KEY_RIGHT => {
             // Arrow Right
             let len = LINE_LENS[EDIT_CUR_Y as usize];
             if EDIT_CUR_X < len {
