@@ -6,6 +6,23 @@ extern "C" {
     fn get_uptime_ms() -> u64;
 }
 
+unsafe fn read_user_string(ptr: *const u8, buf: &mut [u8]) -> Result<usize, &'static str> {
+    if ptr.is_null() {
+        return Err("Null pointer");
+    }
+    let mut len = 0;
+    let max_len = buf.len();
+    while len < max_len - 1 {
+        let c = *ptr.add(len);
+        if c == 0 {
+            break;
+        }
+        buf[len] = c;
+        len += 1;
+    }
+    Ok(len)
+}
+
 /// Central system call dispatcher
 /// Maps standard user registers to operations.
 #[no_mangle]
@@ -40,22 +57,11 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
         // Syscall 5: Execute User Program (exec)
         5 => {
             let filename_ptr = arg1 as *const u8;
-            if filename_ptr.is_null() {
-                return u64::MAX;
-            }
-            
-            let mut name_buf = [0u8; 64];
-            let mut len = 0;
-            unsafe {
-                while len < 63 {
-                    let c = *filename_ptr.add(len);
-                    if c == 0 {
-                        break;
-                    }
-                    name_buf[len] = c;
-                    len += 1;
-                }
-            }
+            let mut name_buf = [0u8; 128];
+            let len = match unsafe { read_user_string(filename_ptr, &mut name_buf) } {
+                Ok(l) => l,
+                Err(_) => return u64::MAX,
+            };
             
             if let Ok(filename_str) = core::str::from_utf8(&name_buf[..len]) {
                 unsafe {
@@ -73,19 +79,11 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
         6 => {
             let path_ptr = arg1 as *const u8;
             let write_mode = arg2 != 0;
-            if path_ptr.is_null() {
-                return u64::MAX;
-            }
             let mut path_buf = [0u8; 128];
-            let mut len = 0;
-            while len < 127 {
-                let c = unsafe { *path_ptr.add(len) };
-                if c == 0 {
-                    break;
-                }
-                path_buf[len] = c;
-                len += 1;
-            }
+            let len = match unsafe { read_user_string(path_ptr, &mut path_buf) } {
+                Ok(l) => l,
+                Err(_) => return u64::MAX,
+            };
             let path_str = match core::str::from_utf8(&path_buf[..len]) {
                 Ok(s) => s,
                 Err(_) => return u64::MAX,
@@ -329,21 +327,11 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
         // Signature: sys_spawn(path_ptr: *const u8) -> child_pid or u64::MAX on error
         12 => {
             let path_ptr = arg1 as *const u8;
-            if path_ptr.is_null() {
-                return u64::MAX;
-            }
             let mut name_buf = [0u8; 128];
-            let mut len = 0;
-            unsafe {
-                while len < 127 {
-                    let c = *path_ptr.add(len);
-                    if c == 0 {
-                        break;
-                    }
-                    name_buf[len] = c;
-                    len += 1;
-                }
-            }
+            let len = match unsafe { read_user_string(path_ptr, &mut name_buf) } {
+                Ok(l) => l,
+                Err(_) => return u64::MAX,
+            };
             if let Ok(filename_str) = core::str::from_utf8(&name_buf[..len]) {
                 unsafe {
                     let parent_idx = crate::task::scheduler::CURRENT_TASK_IDX;
@@ -404,19 +392,11 @@ pub extern "C" fn syscall_dispatcher(num: u64, arg1: u64, arg2: u64, arg3: u64) 
         // Signature: sys_chdir(path_ptr: *const u8) -> 0 on success
         16 => {
             let path_ptr = arg1 as *const u8;
-            if path_ptr.is_null() {
-                return u64::MAX;
-            }
             let mut path_buf = [0u8; 128];
-            let mut len = 0;
-            while len < 127 {
-                let c = unsafe { *path_ptr.add(len) };
-                if c == 0 {
-                    break;
-                }
-                path_buf[len] = c;
-                len += 1;
-            }
+            let len = match unsafe { read_user_string(path_ptr, &mut path_buf) } {
+                Ok(l) => l,
+                Err(_) => return u64::MAX,
+            };
             // Validate path exists
             if let Ok(path_str) = core::str::from_utf8(&path_buf[..len]) {
                 if !crate::fs::vfs::exists(path_str) {

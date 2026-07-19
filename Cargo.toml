@@ -9,7 +9,7 @@
 
 [package]
 name = "keira"
-version = "0.11.0"
+version = "0.11.1"
 edition = "2021"
 authors = ["v1lnv <v1lnv@proton.me>"]
 description = "Keira x86_64 kernel: Rust core module (no_std, freestanding)"

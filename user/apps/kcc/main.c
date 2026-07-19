@@ -147,7 +147,7 @@ void _start(void) {
     // we read from static inputs or configuration file.
     // For Keira self-hosting verification, we will compile `/apps/src/demo.c`
     // and write to `/apps/bin/demo.elf`.
-    printf("Keira C Compiler (kcc) v0.11.0\n");
+    printf("Keira C Compiler (kcc) v0.11.1\n");
     printf("Compiling source: /apps/src/demo.c -> /apps/bin/demo.elf\n");
 
     // Open source file
