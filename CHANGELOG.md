@@ -4,6 +4,15 @@ All notable changes to the Keira Kernel project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-07-20
+
+### Added
+- Self-hosting Keira C Compiler (`kcc`): compiler now successfully compiles itself.
+- Compiler support for multiple global functions, arguments, parameter passing via standard ABI registers, pointer dereferencing (`*`), global variables, and array indexing (`[]`).
+
+### Refactored
+- Compiler source code: simplified C constructs in `kcc/main.c`, replacing complex structs, enums, and typedefs with flat buffers and parallel arrays.
+
 ## [0.13.0] - 2026-07-19
 
 ### Added
